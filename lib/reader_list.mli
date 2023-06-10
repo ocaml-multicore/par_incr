@@ -1,7 +1,7 @@
-type 'a t
+type t
 
-val empty : unit -> 'a t
-val add_reader : 'a t -> 'a -> unit
-val remove_reader : 'a t -> 'a -> unit
-val for_all : 'a t -> ('a -> unit) -> unit
-val len : 'a t -> int
+val empty : unit -> t
+val add_reader : t -> Rsp.RNode.t -> unit
+val remove_reader : t -> Rsp.RNode.t -> unit
+val for_all : t -> (Rsp.RNode.t -> unit) -> unit
+val len : t -> int

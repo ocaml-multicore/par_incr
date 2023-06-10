@@ -47,7 +47,7 @@ let map ?(eq = ( == )) ~(fn : 'a -> 'b) (t : 'a t) (ctx : ctx) (e : executor) =
     let read_x = RNode.make ~fn:RNode.{fn = read_fn} in
     Incr.add_reader x read_x;
     Rsp.set_exn ctx `Left (Rsp.prune left);
-    Rsp.set_exn ctx `Right (Rsp.make_rnode read_x);
+    Rsp.set_exn ctx `Right read_x;
     read_x.fn Update;
     y
   end
@@ -78,7 +78,7 @@ let combine (a : 'a t) (b : 'b t) ctx e =
     Incr.add_reader y read_xy;
     let left = Rsp.make_node `S ~l:(Rsp.prune ll) ~r:(Rsp.prune lr) in
     Rsp.set_exn ctx `Left left;
-    Rsp.set_exn ctx `Right (Rsp.make_rnode read_xy);
+    Rsp.set_exn ctx `Right read_xy;
     read_xy.fn Update;
     xy
   end
@@ -118,7 +118,7 @@ let par ~left ~right ctx e =
     Incr.add_reader rres read_lr;
     let left = Rsp.make_node `P ~l:ll ~r:lr in
     Rsp.set_exn ctx `Left left;
-    Rsp.set_exn ctx `Right (Rsp.make_rnode read_lr);
+    Rsp.set_exn ctx `Right read_lr;
     read_lr.fn Update;
     lr_comb
   end
@@ -136,7 +136,7 @@ let dump_tree file c =
 
 let destroy_comp comp =
   Rsp.destroy comp.root;
-  comp.root <- Types.Dummy
+  comp.root <- Types.nil_tree
 
 let delay f c e = f () c e [@@inline]
 
@@ -178,7 +178,7 @@ let bind ~fn x ctx e =
         in
         let read_yvar' = RNode.make ~fn:RNode.{fn = read_fn_yvar'} in
         Incr.add_reader yvar' read_yvar';
-        Rsp.set_exn r `Right (Rsp.make_rnode read_yvar');
+        Rsp.set_exn r `Right read_yvar';
         read_yvar'.fn Update
       end
       | Remove self -> Incr.remove_reader xvar self
@@ -187,7 +187,7 @@ let bind ~fn x ctx e =
     in
     let read_xvar = RNode.make ~fn:RNode.{fn = read_fn_xvar} in
     Incr.add_reader xvar read_xvar;
-    let l = Rsp.make_node `S ~l:(Rsp.prune ll) ~r:(Rsp.make_rnode read_xvar) in
+    let l = Rsp.make_node `S ~l:(Rsp.prune ll) ~r:read_xvar in
     Rsp.set_exn ctx `Left l;
     read_xvar.fn Update;
     y

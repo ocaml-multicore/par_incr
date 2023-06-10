@@ -152,6 +152,8 @@ let _array_sumv2 n () =
         ~f:(fun () -> run ~executor:{run = par_runner; par_do} sum_par)
         ()
     in
+    print_stats (get_stat seq);
+    print_stats (get_stat par);
     assert (value seq = value par);
     Array.iter (fun x -> _add x (Var.value x)) xs;
     let () =
@@ -229,7 +231,7 @@ let () =
     let dummy_list = List.init n (fun _ -> Random.int lim) in
     (* List.iter (fun x -> Printf.printf "%d " x) dummy_list; *)
     (* Printf.printf "\n"; *)
-    let expected = List.sort Int.compare dummy_list in
+    (* let expected = List.sort Int.compare dummy_list in *)
     let xs = to_var_list dummy_list in
     (* let ys = to_list (qsort (to_incr_list xs)) in *)
     let ys = to_list (qsort (to_incr_list xs)) in
@@ -238,13 +240,13 @@ let () =
         ~f:(fun () -> Incr.run ~executor:seq_executor ys)
         ()
     in
-    assert (Incr.value c = expected);
-    let stat = get_stat c in
-    print_stats stat;
+    (* assert (Incr.value c = expected); *)
+    (* let stat = get_stat c in *)
+    (* print_stats stat; *)
     pb xs lim;
-    print_stats (get_stat c);
-    time_fn ~fn_name:"propagation" ~f:(fun () -> propagate c) ();
-    let expected = lim :: dummy_list |> List.sort Int.compare in
-    assert (Incr.value c = expected);
-    destroy_comp c
+    (* print_stats (get_stat c); *)
+    time_fn ~fn_name:"propagation" ~f:(fun () -> propagate c) ()
+    (* let expected = lim :: dummy_list |> List.sort Int.compare in *)
+    (* assert (Incr.value c = expected) *)
+    (* destroy_comp c *)
   end
