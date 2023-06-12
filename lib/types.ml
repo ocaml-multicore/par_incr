@@ -41,9 +41,6 @@ type executor = {
 
 let rec set_mark (t : comp_tree) =
   let open Utils in
-  if t == nil_tree then ()
-  else
-    let flag = t.flags in
-    if not (is_marked flag) then (
-      t.flags <- make_marked flag;
-      set_mark t.par)
+  if t != nil_tree && not (is_marked t.flags) then (
+    t.flags <- make_marked t.flags;
+    set_mark t.par)

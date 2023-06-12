@@ -166,8 +166,6 @@ let _array_sumv2 n () =
     ()
   end
 
-(* let () = _array_sum_dnc 1000000 () *)
-
 module Var = Incr.Var
 open Incr.Syntax
 
@@ -229,24 +227,18 @@ let () =
 
     let lim = 100 in
     let dummy_list = List.init n (fun _ -> Random.int lim) in
-    (* List.iter (fun x -> Printf.printf "%d " x) dummy_list; *)
-    (* Printf.printf "\n"; *)
-    (* let expected = List.sort Int.compare dummy_list in *)
+    let expected = List.sort Int.compare dummy_list in
     let xs = to_var_list dummy_list in
-    (* let ys = to_list (qsort (to_incr_list xs)) in *)
     let ys = to_list (qsort (to_incr_list xs)) in
     let c =
       time_fn ~fn_name:"qsort"
         ~f:(fun () -> Incr.run ~executor:seq_executor ys)
         ()
     in
-    (* assert (Incr.value c = expected); *)
-    (* let stat = get_stat c in *)
-    (* print_stats stat; *)
+    assert (Incr.value c = expected);
     pb xs lim;
-    (* print_stats (get_stat c); *)
-    time_fn ~fn_name:"propagation" ~f:(fun () -> propagate c) ()
-    (* let expected = lim :: dummy_list |> List.sort Int.compare in *)
-    (* assert (Incr.value c = expected) *)
-    (* destroy_comp c *)
+    time_fn ~fn_name:"propagation" ~f:(fun () -> propagate c) ();
+    let expected = lim :: dummy_list |> List.sort Int.compare in
+    assert (Incr.value c = expected);
+    destroy_comp c
   end

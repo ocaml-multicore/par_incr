@@ -13,10 +13,11 @@ module RNode = struct
       fn;
     }
 
-  let[@inline] mark_dirty t =
+  let[@inline] mark_dirty ({flags; par; _} as t) =
     begin
-      t.flags <- Utils.make_marked t.flags;
-      set_mark t.par
+      if not (Utils.is_marked flags) then (
+        t.flags <- Utils.make_marked flags;
+        set_mark par)
     end
 end
 
@@ -64,12 +65,14 @@ let[@inline] set_exn t dir child =
     let {left; right; _} = t in
     match dir with
     | `Left -> begin
-      t.left <- child;
-      if left != child && left != nil_tree then destroy left
+      if left != child then (
+        t.left <- child;
+        if left != nil_tree then destroy left)
     end
     | `Right -> begin
-      t.right <- child;
-      if right != child && right != nil_tree then destroy right
+      if right != child then (
+        t.right <- child;
+        if right != nil_tree then destroy right)
     end
   end
 
