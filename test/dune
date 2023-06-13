@@ -1,4 +1,26 @@
+(library
+  (name utils)
+  (modules utils)
+  (libraries unix par_incr domainslib)
+)
+
+(library
+  (name bench)
+  (modules bench)
+  (libraries unix)
+)
 (test
   (name incr_test)
+  (modules incr_test)
   (libraries par_incr alcotest)
+)
+(test
+  (name merge_sort)
+  (modules merge_sort)
+  (libraries par_incr utils bench )
+)
+(test
+  (name sum_array)
+  (modules sum_array)
+  (libraries par_incr utils bench)
 )
