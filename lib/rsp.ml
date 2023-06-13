@@ -4,12 +4,20 @@ module RNode = struct
   type t = rnode
   type show_fn_wrapper = {fn : 'a. 'a action -> 'a}
 
-  let make ~fn:{fn} = {par = Dummy; has_pending_update = false; fn}
+  let[@inline] make ~fn:{fn} =
+    {
+      par = Types.nil_tree;
+      flags = Utils.r_flag;
+      left = Types.nil_tree;
+      right = Types.nil_tree;
+      fn;
+    }
 
-  let mark_dirty t =
+  let[@inline] mark_dirty ({flags; par; _} as t) =
     begin
-      t.has_pending_update <- true;
-      set_mark t.par
+      if not (Utils.is_marked flags) then (
+        t.flags <- Utils.make_marked flags;
+        set_mark par)
     end
 end
 
@@ -17,205 +25,185 @@ open Types
 
 type t = comp_tree
 
-let empty = Dummy
+let empty = Types.nil_tree
+let nil_tree = Types.nil_tree
 
-let set_parent_exn ~c ~p ~c_par_fn =
-  match c with
-  | Root _ | Dummy -> failwith "Root/Dummy doesn't have parent"
-  | Par nd ->
-    c_par_fn nd.par;
-    nd.par <- p
-  | Seq nd ->
-    c_par_fn nd.par;
-    nd.par <- p
-  | R rnd ->
-    c_par_fn rnd.par;
-    rnd.par <- p
+let[@inline] set_parent_exn ~c ~p =
+  if c != nil_tree && not (Utils.is_root c.flags) then c.par <- p
+  else Utils.impossible ()
 
 let rec destroy t =
-  match t with
-  | Par _ | Seq _ | Root _ ->
-    let () = set_exn' ~pre:destroy ~post:ignore t `Left Dummy in
-    let () = set_exn' ~pre:destroy ~post:ignore t `Right Dummy in
-    ()
-  | R r -> r.fn (Remove r)
-  | Dummy -> ()
-
-and set_exn' ~pre ~post t dir child =
-  if child != Dummy then set_parent_exn ~c_par_fn:ignore ~c:child ~p:t;
-  match t with
-  | Root r -> begin
-    match dir with
-    | `Left ->
-      pre r.left;
-      r.left <- child;
-      post r.left
-    | `Right ->
-      pre r.right;
-      r.right <- child;
-      post r.right
-  end
-  | Seq nd -> begin
-    match dir with
-    | `Left ->
-      pre nd.left;
-      nd.left <- child;
-      post nd.left
-    | `Right ->
-      pre nd.right;
-      nd.right <- child;
-      post nd.right
-  end
-  | Par nd -> begin
-    match dir with
-    | `Left ->
-      pre nd.left;
-      nd.left <- child;
-      post nd.left
-    | `Right ->
-      pre nd.right;
-      nd.right <- child;
-      post nd.right
-  end
-  | R _ | Dummy -> failwith "R and Dummy nodes don't have left/right child"
-
-(* Set's t's children that lies in dir direction to child *)
-let set_exn ?(f = fun _ -> ()) t dir child =
-  set_exn' ~post:f
-    ~pre:(fun old_c -> if old_c != child then destroy old_c)
-    t dir child
-
-let get_sub_tree_exn t =
-  match t with
-  | Root nd -> (nd.left, nd.right)
-  | Par nd -> (nd.left, nd.right)
-  | Seq nd -> (nd.left, nd.right)
-  | R _ | Dummy -> failwith "R and dummy don't have children"
-
-let prune c =
-  let l, r = get_sub_tree_exn c in
-  match (l, r) with
-  | Dummy, Dummy -> Dummy
-  | Dummy, _ -> r
-  | _, Dummy -> l
-  | _ -> c
-
-let make_root () = Root {left = empty; right = empty}
-
-let make_empty typ =
-  let nd =
-    match typ with
-    | `S -> Seq {par = Dummy; par_mark = false; left = Dummy; right = Dummy}
-    | `P -> Par {par = Dummy; par_mark = false; left = Dummy; right = Dummy}
-  in
-  nd
-
-let make_node ~l ~r typ =
-  if l == Dummy then r
-  else if r == Dummy then l
+  let flags = t.flags in
+  if Utils.is_rnode flags then t.fn (Remove t)
   else
+    let {left; right; _} = t in
+    if left != nil_tree then (
+      t.left <- nil_tree;
+      destroy left);
+    if right != nil_tree then (
+      t.right <- nil_tree;
+      destroy right)
+
+let[@inline] set_exn t dir child =
+  if child != nil_tree then set_parent_exn ~c:child ~p:t;
+  let flag = Utils.masked t.flags in
+  if flag = Utils.r_flag then failwith "R nodes don't have left/right child"
+  else begin
+    let {left; right; _} = t in
+    match dir with
+    | `Left -> begin
+      if left != child then (
+        t.left <- child;
+        if left != nil_tree then destroy left)
+    end
+    | `Right -> begin
+      if right != child then (
+        t.right <- child;
+        if right != nil_tree then destroy right)
+    end
+  end
+
+let[@inline] prune c =
+  if c == nil_tree then nil_tree
+  else begin
+    let flag = Utils.masked c.flags in
+    if flag = Utils.r_flag then c
+    else begin
+      let {left; right; _} = c in
+      if left == nil_tree && right == nil_tree then nil_tree
+      else if left == nil_tree then right
+      else if right == nil_tree then left
+      else c
+    end
+  end
+
+let[@inline] make_root () =
+  {
+    right = empty;
+    left = empty;
+    flags = Utils.root_flag;
+    par = nil_tree;
+    fn = Types.default_action;
+  }
+
+let[@inline] make_empty typ =
+  let flag = match typ with `S -> Utils.s_flag | `P -> Utils.p_flag in
+  {
+    right = empty;
+    left = empty;
+    flags = flag;
+    par = nil_tree;
+    fn = Types.default_action;
+  }
+
+let[@inline] make_node ~l ~r typ =
+  if l == nil_tree then r
+  else if r == nil_tree then l
+  else
+    let flag = match typ with `S -> Utils.s_flag | `P -> Utils.p_flag in
     let nd =
-      match typ with
-      | `S -> Seq {par = Dummy; par_mark = false; left = l; right = r}
-      | `P -> Par {par = Dummy; par_mark = false; left = l; right = r}
+      {
+        right = r;
+        left = l;
+        flags = flag;
+        par = nil_tree;
+        fn = Types.default_action;
+      }
     in
-    set_parent_exn ~c:l ~p:nd ~c_par_fn:ignore;
-    set_parent_exn ~c:r ~p:nd ~c_par_fn:ignore;
+    set_parent_exn ~c:l ~p:nd;
+    set_parent_exn ~c:r ~p:nd;
     nd
 
-let make_rnode rnd = R rnd
+(* let make_rnode rnd = R rnd *)
+
+let[@inline] is_marked c = c != nil_tree && Utils.is_marked c.flags
 
 let rec propagate_exn comp e =
-  match comp with
-  | Root root ->
-    failwith "propagate should never be called with Root variant of comp_tree"
-  | Dummy -> ()
-  | Seq snd -> begin
-    if snd.par_mark then (
-      propagate_exn snd.left e;
-      propagate_exn snd.right e;
-      snd.par_mark <- false)
-    else ()
-  end
-  | Par pnd -> begin
-    if pnd.par_mark then
+  (* if comp == nil_tree then () *)
+  (* else  *)
+  begin
+    let {left; right; fn; flags; _} = comp in
+    let masked_flag = Utils.masked flags in
+    (* if Utils.is_marked flag then begin *)
+    if masked_flag = Utils.r_flag then fn Update
+    else if masked_flag = Utils.p_flag && is_marked left && is_marked right then
       let _ =
         e.par_do
-          (fun _ -> propagate_exn pnd.left e)
-          (fun _ -> propagate_exn pnd.right e)
+          (fun () -> propagate_exn left e)
+          (fun () -> propagate_exn right e)
       in
-      pnd.par_mark <- false
-    else ()
-  end
-  | R rnd -> begin
-    if rnd.has_pending_update then (
-      rnd.fn Update;
-      rnd.has_pending_update <- false)
-    else ()
+      ()
+    else begin
+      (* Root is impossible case *)
+      if masked_flag = Utils.root_flag then Utils.impossible ();
+      if is_marked left then propagate_exn left e;
+      if is_marked right then propagate_exn right e
+    end;
+    (* end; *)
+    comp.flags <- masked_flag
   end
 
 let propagate_root comp e =
-  match comp with
-  | Root root -> begin
-    e.run (fun () ->
-        propagate_exn root.left e;
-        propagate_exn root.right e)
+  if comp == nil_tree then
+    failwith "Cannot propagate destroyed/ill-formed computation"
+  else begin
+    let {left; right; flags; par; _} = comp in
+    assert (Utils.is_root flags);
+    assert (par == nil_tree);
+    if Utils.is_marked comp.flags then
+      e.run (fun () ->
+          if is_marked left then propagate_exn left e;
+          if is_marked right then propagate_exn right e)
   end
-  | _ -> failwith "Cannot propagate destroyed/ill-formed computation"
 
-let set_and_get_exn t dir child =
-  set_exn t dir child;
+let[@inline] set_and_get_exn t dir child =
+  (set_exn [@inlined]) t dir child;
   child
 
 let to_d2 ?(cnt = ref 0) (oc : Out_channel.t) =
   (* let cnt = ref 0 in *)
-  let incr_and_get cnt =
+  let[@inline] incr_and_get cnt =
     incr cnt;
     !cnt
   in
   let rec to_d2' parent t =
-    match t with
-    | Dummy -> begin
+    if t == nil_tree then (
       let n = incr_and_get cnt in
-      Printf.fprintf oc "\n%d: Dummy" n;
-      n
+      Printf.fprintf oc "\n%d: Nil" n;
+      n)
+    else begin
+      let flag = t.flags in
+      let nd_type = Utils.masked flag in
+      let marked = Utils.is_marked flag in
+      let nd_type_as_string = Utils.typeflag_to_string nd_type in
+      if nd_type = Utils.r_flag then begin
+        assert (t.par == parent);
+        let n = incr_and_get cnt in
+        Printf.fprintf oc
+          "\n%d: R {\nshape: sql_table\npending_mod: %s\ndetail: %s }" n
+          (Bool.to_string marked) (t.fn Show);
+        n
+      end
+      else begin
+        let {left; right; par; _} = t in
+        assert (par == parent);
+        let leftid = to_d2' t left in
+        let rightid = to_d2' t right in
+        let n = incr_and_get cnt in
+        Printf.fprintf oc
+          "\n\
+           %d: %s {\n\
+           shape: sql_table\n\
+           par_mark:%s\n\
+           }\n\
+          \ %d -> %d : %s \n\
+          \ %d -> %d : %s " n nd_type_as_string (Bool.to_string marked) n leftid
+          "Left" n rightid "Right";
+        n
+      end
     end
-    | R rnd -> begin
-      assert (rnd.par == parent);
-      let n = incr_and_get cnt in
-      Printf.fprintf oc
-        "\n%d: R {\nshape: sql_table\npending_mod: %s\ndetail: %s }" n
-        (Bool.to_string rnd.has_pending_update)
-        (rnd.fn Show);
-      n
-    end
-    | _ ->
-      let l, r = get_sub_tree_exn t in
-      let leftid = to_d2' t l in
-      let rightid = to_d2' t r in
-      let typ, parent_marked =
-        match t with
-        | Root _ -> ("Root", "NA")
-        | Seq nd ->
-          assert (nd.par == parent);
-          ("Seq", Bool.to_string nd.par_mark)
-        | Par nd ->
-          assert (nd.par == parent);
-          ("Par", Bool.to_string nd.par_mark)
-        | _ -> failwith "Invalid"
-      in
-      let n = incr_and_get cnt in
-      Printf.fprintf oc
-        "\n\
-         %d: %s {\n\
-         shape: sql_table\n\
-         par_mark:%s\n\
-         }\n\
-        \ %d -> %d : %s \n\
-        \ %d -> %d : %s " n typ parent_marked n leftid "Left" n rightid "Right";
-      n
   in
-  to_d2' Dummy
+  to_d2' nil_tree
 
 let get_stats t =
   let stats : counter =
@@ -231,31 +219,26 @@ let get_stats t =
       p = 0;
     }
   in
-  let rec f p = function
-    | R rnd ->
-      assert (rnd.par == p);
-      rnd.fn (Count stats);
-      stats.r <- stats.r + 1;
-      if rnd.has_pending_update then stats.dirty <- stats.dirty + 1
-    | (Root {left; right; _} | Par {left; right; _} | Seq {left; right; _}) as t
-      -> begin
-      f t left;
-      f t right;
-      let () =
-        match t with
-        | Par pnd ->
-          stats.p <- stats.p + 1;
-          if pnd.par_mark then stats.dirty <- stats.dirty + 1;
-          assert (pnd.par == p)
-        | Seq snd ->
-          stats.s <- stats.s + 1;
-          if snd.par_mark then stats.dirty <- stats.dirty + 1;
-          assert (snd.par == p)
-        | _ -> ()
-      in
-      ()
+  let rec f p t =
+    if t == nil_tree then stats.dummy <- stats.dummy + 1
+    else begin
+      let flag = t.flags in
+      if Utils.is_marked flag then stats.dirty <- stats.dirty + 1;
+      let nd_type = Utils.masked flag in
+      if nd_type = Utils.r_flag then (
+        assert (t.par == p);
+        t.fn (Count stats);
+        stats.r <- stats.r + 1)
+      else
+        let {left; right; par; _} = t in
+        assert (par == p);
+        if nd_type = Utils.s_flag || nd_type = Utils.root_flag then
+          stats.s <- stats.s + 1
+        else if nd_type = Utils.p_flag then stats.p <- stats.p + 1
+        else Utils.impossible ();
+        f t left;
+        f t right
     end
-    | Dummy -> stats.dummy <- stats.dummy + 1
   in
-  f Dummy t;
+  f nil_tree t;
   stats

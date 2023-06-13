@@ -1,23 +1,10 @@
-(* In a better looking version of this decl, we'd define some common *)
-(* type and have Seq of <type> | Par of <type> but doing that would  *)
-(* we'd be chasing pointers a lot and will incur more allocation, we *)
-(* want to avoid that. *)
-type comp_tree =
-  | Dummy
-  | Root of {mutable left : comp_tree; mutable right : comp_tree}
-  | Seq of {
-      mutable par : comp_tree;
-      mutable par_mark : bool;
-      mutable left : comp_tree;
-      mutable right : comp_tree;
-    }
-  | Par of {
-      mutable par : comp_tree;
-      mutable par_mark : bool;
-      mutable left : comp_tree;
-      mutable right : comp_tree;
-    }
-  | R of rnode
+type comp_tree = {
+  mutable par : comp_tree;
+  mutable flags : int;
+  mutable left : comp_tree;
+  mutable right : comp_tree;
+  fn : 'a. 'a action -> 'a;
+}
 
 and counter = {
   mutable map : int;
@@ -37,28 +24,23 @@ and _ action =
   | Show : string action
   | Count : counter -> unit action
 
-and rnode = {
-  mutable par : comp_tree;
-  mutable has_pending_update : bool;
-  fn : 'a. 'a action -> 'a;
-}
+and rnode = comp_tree
+
+let default_action : type a. a action -> a = function
+  | Update -> ()
+  | Remove _ -> ()
+  | Show -> ""
+  | Count _ -> ()
+
+let nil_tree : comp_tree = Obj.magic ()
 
 type executor = {
   run : 'a. (unit -> 'a) -> 'a;
   par_do : 'a 'b. (unit -> 'a) -> (unit -> 'b) -> 'a * 'b;
 }
 
-let rec set_mark t =
-  match t with
-  | Root _ -> ()
-  | Seq nd ->
-    if not nd.par_mark then begin
-      nd.par_mark <- true;
-      set_mark nd.par
-    end
-  | Par nd ->
-    if not nd.par_mark then begin
-      nd.par_mark <- true;
-      set_mark nd.par
-    end
-  | R _ | Dummy -> Utils.impossible ()
+let rec set_mark (t : comp_tree) =
+  let open Utils in
+  if t != nil_tree && not (is_marked t.flags) then (
+    t.flags <- make_marked t.flags;
+    set_mark t.par)

@@ -141,16 +141,17 @@ let par_test () =
         let () = Var.set x 30 in
         let () = propagate dbl_sum in
         Alcotest.(check int) output_check 100 (value dbl_sum);
-        Alcotest.(check int) par_do_call_check 2 !par_do_call_count;
+        (*Wouldn't call par_do since only one side was affected*)
+        Alcotest.(check int) par_do_call_check 1 !par_do_call_count;
 
-        let expected_par_call_cnt = ref 2 in
+        let expected_par_call_cnt = ref 1 in
 
         for i = 1 to 10 do
+          incr expected_par_call_cnt;
           for j = 1 to 10 do
             let () = Var.set x i in
             let () = Var.set y j in
             let () = propagate dbl_sum in
-            incr expected_par_call_cnt;
 
             Alcotest.(check int) output_check (2 * (i + j)) (value dbl_sum);
             Alcotest.(check int)
@@ -208,17 +209,18 @@ let par_test_for_gc () =
     let () = Var.set x 30 in
     let () = propagate dbl_sum in
     Alcotest.(check int) output_check 100 (value dbl_sum);
-    Alcotest.(check int) par_do_call_check 2 !par_do_call_count;
+    (*Wouldn't call par_do since only one side was affected*)
+    Alcotest.(check int) par_do_call_check 1 !par_do_call_count;
     Alcotest.(check int) no_leak_check live_words_at_start (live_words ());
 
-    let expected_par_call_cnt = ref 2 in
+    let expected_par_call_cnt = ref 1 in
 
     for i = 1 to 10 do
+      incr expected_par_call_cnt;
       for j = 1 to 10 do
         let () = Var.set x i in
         let () = Var.set y j in
         let () = propagate dbl_sum in
-        incr expected_par_call_cnt;
 
         Alcotest.(check int) output_check (2 * (i + j)) (value dbl_sum);
         Alcotest.(check int)
