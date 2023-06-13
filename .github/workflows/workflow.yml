@@ -60,4 +60,4 @@ jobs:
         run: opam exec -- dune build
 
       - name: Test
-        run: opam exec -- dune exec -- test/test.exe
+        run: opam exec -- dune runtest
