@@ -32,30 +32,17 @@ let[@inline] set_parent_exn ~c ~p =
   if c != nil_tree && not (Utils.is_root c.flags) then c.par <- p
   else Utils.impossible ()
 
-let rec destroy_rec t =
+let rec destroy t =
   let flags = t.flags in
   if Utils.is_rnode flags then t.fn (Remove t)
   else
     let {left; right; _} = t in
     if left != nil_tree then (
       t.left <- nil_tree;
-      destroy_rec left);
+      destroy left);
     if right != nil_tree then (
       t.right <- nil_tree;
-      destroy_rec right)
-
-let destroy_nonrec t =
-  if t == nil_tree then ();
-  let q = Dll.empty () in
-  let () = Dll.push_back q t in
-  while Dll.size q <> 0 do
-    let ({left; right; flags; fn; _} as front) = Dll.pop_front q in
-    if left != nil_tree then Dll.push_back q left;
-    if right != nil_tree then Dll.push_back q right;
-    if Utils.is_rnode flags then fn (Remove front) else ()
-  done
-
-let destroy = destroy_rec
+      destroy right)
 
 let[@inline] set_exn t dir child =
   if child != nil_tree then set_parent_exn ~c:child ~p:t;

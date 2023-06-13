@@ -25,8 +25,8 @@ let[@inline] is_root flag = flag land mask = root_flag
 let[@inline] masked flag = flag land mask
 
 let[@inline] typeflag_to_string flag =
+  assert (0 <= flag && flag <= mask);
   if flag = root_flag then "Root"
   else if flag = r_flag then "R"
   else if flag = s_flag then "Seq"
-  else if flag = p_flag then "Par"
-  else impossible ()
+  else "Par"
