@@ -69,22 +69,22 @@ let () =
      benchmarks\n"
     !no_of_entries !no_of_input_changes;
   let sum_result = ref 0 in
-  let sum_wo_lib =
-    Bench.run ~name:"Summing array w/o library" ~runs
+  let static_seq_arr_sum =
+    Bench.run ~name:"static-seq-arr-sum" ~runs
       ~f:(fun () -> Array.fold_left (fun acc x -> acc + x) 0 arr)
       ~post:(fun x -> sum_result := x)
       ()
   in
-  let sum_seq_lib =
-    Bench.run ~name:"Initial computation(seq)" ~runs
+  let incr_seq_arr_sum_initial_cons =
+    Bench.run ~name:"incr-seq-arr-sum-initial-cons" ~runs
       ~f:(fun () -> run_incr sum_seq)
       ~post:(fun c ->
         assert (Incr.value c = !sum_result);
         destroy_comp c)
       ()
   in
-  let sum_par_lib =
-    Bench.run ~name:"Initial computation(par)" ~runs
+  let incr_par_arr_sum_initial_cons =
+    Bench.run ~name:"incr-par-arr-sum-initial-cons" ~runs
       ~f:(fun () -> run_incr sum_par)
       ~post:(fun c ->
         assert (Incr.value c = !sum_result);
@@ -92,8 +92,8 @@ let () =
       ()
   in
   let seq_comp = run_incr sum_seq in
-  let prop_seq =
-    Bench.run ~name:"Propagation(seq)"
+  let incr_seq_arr_sum_prop =
+    Bench.run ~name:"incr-seq-arr-sum-prop"
       ~pre:(fun () ->
         change_inputs ();
         sum_result := Array.fold_left (fun acc x -> acc + Var.value x) 0 var_arr)
@@ -105,8 +105,8 @@ let () =
   destroy_comp seq_comp;
 
   let par_comp = run_incr sum_par in
-  let prop_par =
-    Bench.run ~name:"Propagation(par)"
+  let incr_par_arr_sum_prop =
+    Bench.run ~name:"incr-par-arr-sum-prop"
       ~pre:(fun () ->
         change_inputs ();
         sum_result := Array.fold_left (fun acc x -> acc + Var.value x) 0 var_arr)
@@ -116,6 +116,13 @@ let () =
       ()
   in
   destroy_comp par_comp;
-  Bench.report [sum_wo_lib; sum_seq_lib; sum_par_lib; prop_seq; prop_par]
+  Bench.report
+    [
+      static_seq_arr_sum;
+      incr_seq_arr_sum_initial_cons;
+      incr_par_arr_sum_initial_cons;
+      incr_seq_arr_sum_prop;
+      incr_par_arr_sum_prop;
+    ]
 
 let () = T.teardown_pool pool

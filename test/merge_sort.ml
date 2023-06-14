@@ -39,22 +39,7 @@ let msort_list xs =
   xs |> List.map (fun x -> [x]) |> loop
 
 let () = assert (msort_list [3; 1; 4; 1; 5; 9; 2] = [1; 1; 2; 3; 4; 5; 9])
-
-let reduce ~mode zero one plus xs =
-  let n = Array.length xs in
-  if n = 0 then Incr.return zero
-  else
-    let rec reduce lo hi =
-      Incr.delay @@ fun () ->
-      let delta = hi - lo in
-      if delta = 1 then Incr.map ~fn:one xs.(lo)
-      else
-        let mid = lo + (delta asr 1) in
-        Incr.map2 ~mode ~fn:plus (reduce lo mid) (reduce mid hi)
-    in
-    reduce 0 n
-
-let msort ~mode xss = reduce ~mode [] msort_list merge xss
+let msort ~mode xss = Utils.reduce_arr ~mode [] msort_list merge xss
 
 let is_sorted = function
   | [] -> true
@@ -88,29 +73,29 @@ let () =
     "Sorting array of size: %d | %d elements changed in propagation\n"
     !no_of_entries !no_of_input_changes;
   let tmp_arr = ref [||] in
-  let sorting_wo_lib =
-    Bench.run ~name:"Sorting array w/o library" ~runs
+  let static_seq_stdlib_sort =
+    Bench.run ~name:"static-seq-stdlib-sort" ~runs
       ~pre:(fun () -> tmp_arr := Array.map Fun.id arr)
       ~f:(fun () -> Array.fast_sort Int.compare !tmp_arr)
       ~post:(fun _ -> tmp_arr := [||])
       ()
   in
   let lst = Array.to_list arr in
-  let sorting_w_msort_list =
-    Bench.run ~name:"Sorting array with our merge_sort" ~runs
+  let static_seq_custom_msort =
+    Bench.run ~name:"static-seq-custom-msort" ~runs
       ~f:(fun () -> msort_list lst)
       ~post:ignore ()
   in
-  let sort_initial_seq =
-    Bench.run ~name:"Initial sorting(seq)" ~runs
+  let incr_seq_msort_initial_cons =
+    Bench.run ~name:"incr-seq-msort-initial-cons" ~runs
       ~f:(fun () -> run_incr (msort ~mode:`Seq t_arr))
       ~post:(fun c ->
         assert (is_sorted (value c));
         destroy_comp c)
       ()
   in
-  let sort_initial_par =
-    Bench.run ~name:"Initial sorting(par)" ~runs
+  let incr_par_msort_initial_cons =
+    Bench.run ~name:"incr-par-msort-initial-cons" ~runs
       ~f:(fun () -> run_incr (msort ~mode:`Par t_arr))
       ~post:(fun c ->
         assert (is_sorted (value c));
@@ -118,14 +103,14 @@ let () =
       ()
   in
   let msort_seq_comp = run_incr (msort ~mode:`Seq t_arr) in
-  let prop_seq_msort =
-    Bench.run ~name:"Propagation(seq)" ~pre:change_inputs ~runs
+  let incr_seq_msort_change_prop =
+    Bench.run ~name:"incr-seq-msort-change-prop" ~pre:change_inputs ~runs
       ~f:(fun () -> propagate msort_seq_comp)
       ~post:(fun _ -> assert (msort_seq_comp |> value |> is_sorted))
       ()
   in
-  let append_element_prop_seq =
-    Bench.run ~name:"Append Propagation(seq)"
+  let incr_seq_msort_append_prop =
+    Bench.run ~name:"incr-seq-msort-append-prop"
       ~pre:(fun () ->
         (* Append to the last element *)
         let n = !no_of_entries in
@@ -143,14 +128,14 @@ let () =
   destroy_comp msort_seq_comp;
 
   let msort_par_comp = run_incr (msort ~mode:`Par t_arr) in
-  let prop_par_msort =
-    Bench.run ~name:"Propagation(par)" ~pre:change_inputs ~runs
+  let incr_par_msort_change_prop =
+    Bench.run ~name:"incr-par-msort-change-prop" ~pre:change_inputs ~runs
       ~f:(fun () -> propagate msort_par_comp)
       ~post:(fun _ -> assert (msort_par_comp |> value |> is_sorted))
       ()
   in
-  let append_element_prop_par =
-    Bench.run ~name:"Append Propagation(par)"
+  let incr_par_msort_append_prop =
+    Bench.run ~name:"incr-par-msort-append-prop"
       ~pre:(fun () ->
         (* Append to the last element *)
         let n = !no_of_entries in
@@ -167,14 +152,14 @@ let () =
   destroy_comp msort_par_comp;
   Bench.report
     [
-      sorting_wo_lib;
-      sorting_w_msort_list;
-      sort_initial_seq;
-      sort_initial_par;
-      prop_seq_msort;
-      prop_par_msort;
-      append_element_prop_seq;
-      append_element_prop_par;
+      static_seq_stdlib_sort;
+      static_seq_custom_msort;
+      incr_seq_msort_initial_cons;
+      incr_par_msort_initial_cons;
+      incr_seq_msort_change_prop;
+      incr_par_msort_change_prop;
+      incr_seq_msort_append_prop;
+      incr_par_msort_append_prop;
     ]
 
 let () = T.teardown_pool pool

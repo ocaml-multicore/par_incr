@@ -24,3 +24,8 @@
   (modules sum_array)
   (libraries par_incr utils bench)
 )
+(test
+  (name spellcheck)
+  (modules spellcheck)
+  (libraries par_incr utils bench)
+)

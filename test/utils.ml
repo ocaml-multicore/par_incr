@@ -25,3 +25,18 @@ let get_par_executor ~num_domains () =
     (T.await pool lres, rres)
   in
   (pool, Incr.{run = par_runner; par_do})
+
+let reduce_arr ~mode (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
+    (xs : 'b Incr.t array) : 'a Incr.t =
+  let n = Array.length xs in
+  if n = 0 then Incr.return zero
+  else
+    let rec reduce lo hi =
+      Incr.delay @@ fun () ->
+      let delta = hi - lo in
+      if delta = 1 then Incr.map ~fn:one xs.(lo)
+      else
+        let mid = lo + (delta asr 1) in
+        Incr.map2 ~mode ~fn:plus (reduce lo mid) (reduce mid hi)
+    in
+    reduce 0 n
