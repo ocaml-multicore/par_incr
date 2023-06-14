@@ -29,3 +29,9 @@
   (modules spellcheck)
   (libraries par_incr utils bench)
 )
+
+(test
+  (name filter)
+  (modules filter)
+  (libraries par_incr utils bench)
+)
