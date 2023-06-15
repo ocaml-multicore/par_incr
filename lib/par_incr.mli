@@ -130,7 +130,7 @@ module Var : sig
   end
 end
 
-val return : ?eq:('a -> 'a -> bool) -> 'a -> 'a t
+val return : 'a -> 'a t
 (** [return x] returns an instance of ['a incremental] from [x] of type ['a]. *)
 
 val map : ?eq:('b -> 'b -> bool) -> fn:('a -> 'b) -> 'a t -> 'b t

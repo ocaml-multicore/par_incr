@@ -29,7 +29,7 @@ let get_par_executor ~num_domains () =
 let reduce_arr ~mode ?(eq = ( == )) (zero : 'a) (one : 'b -> 'a)
     (plus : 'a -> 'a -> 'a) (xs : 'b Incr.t array) : 'a Incr.t =
   let n = Array.length xs in
-  if n = 0 then Incr.return ~eq zero
+  if n = 0 then Incr.return zero
   else
     let rec reduce lo hi =
       Incr.delay @@ fun () ->
@@ -78,4 +78,4 @@ let reduce_lst ~mode ?(eq = ( == )) (zero : 'a) (one : 'b -> 'a)
   let res : 'a Incr.t list = foldi l ~init:[] ~f:step_accum in
   List.fold_left
     (fun x y -> Incr.delay @@ fun () -> Incr.map2 ~eq ~fn:plus y x)
-    (Incr.return ~eq zero) res
+    (Incr.return zero) res
