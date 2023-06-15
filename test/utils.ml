@@ -26,35 +26,37 @@ let get_par_executor ~num_domains () =
   in
   (pool, Incr.{run = par_runner; par_do})
 
-let reduce_arr ~mode (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
-    (xs : 'b Incr.t array) : 'a Incr.t =
+let reduce_arr ~mode ?(eq = ( == )) (zero : 'a) (one : 'b -> 'a)
+    (plus : 'a -> 'a -> 'a) (xs : 'b Incr.t array) : 'a Incr.t =
   let n = Array.length xs in
-  if n = 0 then Incr.return zero
+  if n = 0 then Incr.return ~eq zero
   else
     let rec reduce lo hi =
       Incr.delay @@ fun () ->
       let delta = hi - lo in
-      if delta = 1 then Incr.map ~fn:one xs.(lo)
+      if delta = 1 then Incr.map ~eq ~fn:one xs.(lo)
       else
         let mid = lo + (delta asr 1) in
-        Incr.map2 ~mode ~fn:plus (reduce lo mid) (reduce mid hi)
+        Incr.map2 ~eq ~mode ~fn:plus (reduce lo mid) (reduce mid hi)
     in
     reduce 0 n
 
-let reduce_lst ~mode (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
-    (l : 'b Incr.t list) : 'a Incr.t =
+let reduce_lst ~mode ?(eq = ( == )) (zero : 'a) (one : 'b -> 'a)
+    (plus : 'a -> 'a -> 'a) (l : 'b Incr.t list) : 'a Incr.t =
   (*Code highly inspired from Base.List.reduced_balanced*)
   let rec step_accum' num acc x =
     if num land 1 = 0 then x :: acc
+      (* (Incr.Debug.attach ~fn:to_s @@ Incr.map ~eq ~fn:Fun.id x) :: acc *)
     else
       match acc with
       | [] -> assert false
       | y :: ys ->
         step_accum' (num asr 1) ys
-          (Incr.delay @@ fun () -> Incr.map2 ~mode ~fn:plus y x)
+          (Incr.delay @@ fun () -> Incr.map2 ~mode ~eq ~fn:plus y x)
   in
   let step_accum num acc x =
-    if num land 1 = 0 then (Incr.delay @@ fun () -> Incr.map ~fn:one x) :: acc
+    if num land 1 = 0 then
+      (Incr.delay @@ fun () -> Incr.map ~eq ~fn:one x) :: acc
     else
       match acc with
       | [] -> assert false
@@ -64,7 +66,7 @@ let reduce_lst ~mode (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
       | y :: ys ->
         step_accum' (num asr 1) ys
           ( Incr.delay @@ fun () ->
-            Incr.map2 ~mode ~fn:plus y (Incr.map ~fn:one x) )
+            Incr.map2 ~eq ~mode ~fn:plus y (Incr.map ~eq ~fn:one x) )
   in
   let foldi (l : 'b Incr.t list) ~(init : 'a Incr.t list)
       ~(f : int -> 'a Incr.t list -> 'b Incr.t -> 'a Incr.t list) =
@@ -74,9 +76,6 @@ let reduce_lst ~mode (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
     v
   in
   let res : 'a Incr.t list = foldi l ~init:[] ~f:step_accum in
-  match res with
-  | [] -> Incr.return zero
-  | x :: xs ->
-    List.fold_left
-      (fun x y -> Incr.delay @@ fun () -> Incr.map2 ~fn:plus y x)
-      x xs
+  List.fold_left
+    (fun x y -> Incr.delay @@ fun () -> Incr.map2 ~eq ~fn:plus y x)
+    (Incr.return ~eq zero) res

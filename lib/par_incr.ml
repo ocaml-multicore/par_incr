@@ -54,7 +54,7 @@ module Var = struct
   end
 end
 
-let return x _ _ = Var.create x
+let return ?(eq = ( == )) x _ _ = Var.create ~eq x
 
 let map ?(eq = ( == )) ~(fn : 'a -> 'b) (t : 'a t) (ctx : ctx) (e : executor) =
   begin
