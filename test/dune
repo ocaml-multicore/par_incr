@@ -35,3 +35,8 @@
   (modules filter)
   (libraries par_incr utils bench)
 )
+(test
+  (name rabin_karp)
+  (modules rabin_karp)
+  (libraries par_incr utils bench)
+)
