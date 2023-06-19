@@ -4,7 +4,6 @@
  (modules operations)
 )
 (executable
- (public_name par_incr)
  (name main)
  (libraries par_incr unix examples)
  (modules main)

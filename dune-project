@@ -19,9 +19,9 @@
  (name par_incr)
  (synopsis "Parallel Self Adjusting Computation")
  (description "Parallel version of the incremental library")
- (depends ocaml dune domainslib (alcotest :with-test))
+ (depends ocaml dune domainslib (alcotest :with-test) (mdx :with-test))
  (tags
   (ocaml incremental "multicore-ocaml")
 ))
-
+(using mdx 0.2)
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
