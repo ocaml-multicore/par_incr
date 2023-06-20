@@ -272,26 +272,25 @@ let bind_test () =
 
 let internals_test () =
   begin
-    let ops = Atomic.make 0 in
-    let reset_ops () = Atomic.set ops 0 in
-    let rec sum_range ~mode ~lo ~hi xs =
+    let ops = ref 0 in
+    let reset_ops () = ops := 0 in
+    let rec sum_range ~lo ~hi xs =
       delay @@ fun () ->
       if hi - lo <= 1 then begin
         xs.(lo)
       end
       else
         let mid = lo + ((hi - lo) asr 1) in
-        map2 ~mode
+        map2
           ~fn:(fun x y ->
-            Atomic.incr ops;
+            incr ops;
             Int.add x y)
-          (sum_range ~mode ~lo ~hi:mid xs)
-          (sum_range ~mode ~lo:mid ~hi xs)
+          (sum_range ~lo ~hi:mid xs) (sum_range ~lo:mid ~hi xs)
     in
     let arr = Array.of_list [1; 2; 3; 4; 5; 6; 7; 8; 9; 10] in
-    let var_arr = Array.map (Var.create ~to_s:Int.to_string) arr in
+    let var_arr = Array.map Var.create arr in
     let t_arr = Array.map Var.watch var_arr in
-    let sum = sum_range ~mode:`Seq ~lo:0 ~hi:(Array.length t_arr) t_arr in
+    let sum = sum_range ~lo:0 ~hi:(Array.length t_arr) t_arr in
     let executor =
       {
         run = (fun f -> f ());
@@ -317,27 +316,150 @@ let internals_test () =
         0,1|1,2   2,3 | 3-5     5,6|6-7  7,8 | 8,10
                         3-4|4-5                8,9|9,10
     *)
-    Alcotest.(check int) "No of add operations executed" 9 (Atomic.get ops);
+    Alcotest.(check int) "No of add operations executed" 9 !ops;
 
     reset_ops ();
 
-    let open Var.Syntax in
-    (*This computation should cutoff early since the value of the sum of these two wont change*)
-    var_arr.(0) := 0;
-    var_arr.(1) := 3;
+    Var.Syntax.(
+      (*This computation should cutoff early since the value of the sum of these two won't change*)
+      var_arr.(0) := 0;
+      var_arr.(1) := 3);
 
     propagate sum_c;
-    Alcotest.(check int) "No of add operations executed" 1 (Atomic.get ops);
+    Alcotest.(check int) "No of add operations executed" 1 !ops;
 
     reset_ops ();
 
-    var_arr.(2) := !(var_arr.(2)) + 1;
+    Var.Syntax.(var_arr.(2) := !(var_arr.(2)) + 1);
 
     propagate sum_c;
     Alcotest.(check int) output_check 56 (value sum_c);
-    Alcotest.(check int) "No of add operations executed" 3 (Atomic.get ops);
+    Alcotest.(check int) "No of add operations executed" 3 !ops;
 
     destroy_comp sum_c
+  end
+
+let bind_internals_test () =
+  begin
+    let sum' xs = List.fold_left ( + ) 0 xs in
+    let product xs = List.fold_left ( * ) 1 xs in
+    let reduce ~zero ~one ~plus xs =
+      let n = Array.length xs in
+      if n = 0 then return zero
+      else
+        let rec reduce' lo hi =
+          delay @@ fun () ->
+          let delta = hi - lo in
+          if delta = 1 then map ~fn:one xs.(lo)
+          else
+            let mid = lo + (delta asr 1) in
+            map2 ~fn:plus (reduce' lo mid) (reduce' mid hi)
+        in
+        reduce' 0 n
+    in
+    let if' c t e =
+      let open Syntax in
+      let* c = c in
+      if c then t else e
+    in
+    let add_cnt = ref 0 in
+    let mul_cnt = ref 0 in
+    let add x y =
+      incr add_cnt;
+      x + y
+    in
+    let mul x y =
+      incr mul_cnt;
+      x * y
+    in
+    let reset x = x := 0 in
+
+    let arr = Array.of_list [1; 2; 3; 4; 5; 6; 7; 8; 9; 10] in
+    let var_arr = Array.map Var.create arr in
+    let t_arr = Array.map Var.watch var_arr in
+    let sum = reduce ~zero:0 ~one:Fun.id ~plus:add t_arr in
+    let prod = reduce ~zero:1 ~one:Fun.id ~plus:mul t_arr in
+    let assert_n_reader n =
+      Array.iter
+        (fun x -> Alcotest.(check int) reader_check n (Var.num_readers x))
+        var_arr
+    in
+    assert_n_reader 0;
+
+    (*
+       Call stack tree for sum and prod
+
+       Roughly looks like the following:
+
+                             0,10
+                 0,5          |      5,10
+            0,2  |  2-5            5,7 | 7,10
+        0,1|1,2   2,3 | 3-5     5,6|6-7  7,8 | 8,10
+                        3-4|4-5                8,9|9,10
+    *)
+    let pred = Var.create true in
+    let comp = run ~executor:seq_executor @@ if' (Var.watch pred) sum prod in
+
+    Alcotest.(check int)
+      output_check
+      (sum' [1; 2; 3; 4; 5; 6; 7; 8; 9; 10])
+      (value comp);
+    assert_n_reader 1;
+    Alcotest.(check int) "Check executed function" 9 !add_cnt;
+    (*The prod branch is detached from the rsp tree*)
+    Alcotest.(check int) "Check executed function" 0 !mul_cnt;
+
+    Var.set var_arr.(3) 5;
+    reset add_cnt;
+    propagate comp;
+    Alcotest.(check int) "Check executed function" 4 !add_cnt;
+    Alcotest.(check int) "Check executed function" 0 !mul_cnt;
+    Alcotest.(check int)
+      output_check
+      (sum' [1; 2; 3; 5; 5; 6; 7; 8; 9; 10])
+      (value comp);
+    assert_n_reader 1;
+
+    Var.set pred false;
+    reset add_cnt;
+    propagate comp;
+
+    Alcotest.(check int)
+      output_check
+      (product [1; 2; 3; 5; 5; 6; 7; 8; 9; 10])
+      (value comp);
+    Alcotest.(check int) "Check executed function" 0 !add_cnt;
+    Alcotest.(check int) "Check executed function" 9 !mul_cnt;
+    assert_n_reader 1;
+
+    Var.set var_arr.(0) 10;
+    reset mul_cnt;
+    propagate comp;
+
+    Alcotest.(check int)
+      output_check
+      (product [10; 2; 3; 5; 5; 6; 7; 8; 9; 10])
+      (value comp);
+    Alcotest.(check int) "Check executed function" 0 !add_cnt;
+    Alcotest.(check int) "Check executed function" 3 !mul_cnt;
+    assert_n_reader 1;
+
+    Var.set pred true;
+    reset mul_cnt;
+    propagate comp;
+
+    Alcotest.(check int)
+      output_check
+      (sum' [10; 2; 3; 5; 5; 6; 7; 8; 9; 10])
+      (value comp);
+
+    (*The old add computation was fully destroyed when it was detached so
+      it recomputes everything*)
+    Alcotest.(check int) "Check executed function" 9 !add_cnt;
+    Alcotest.(check int) "Check executed function" 0 !mul_cnt;
+    assert_n_reader 1;
+
+    destroy_comp comp
   end
 
 let () =
@@ -352,6 +474,10 @@ let () =
           Alcotest.test_case "par" `Quick par_test;
           Alcotest.test_case "par_test_for_gc" `Quick par_test_for_gc;
           Alcotest.test_case "bind" `Quick bind_test;
+        ] );
+      ( "internals_test",
+        [
           Alcotest.test_case "internals" `Quick internals_test;
+          Alcotest.test_case "bind_internals" `Quick bind_internals_test;
         ] );
     ]
