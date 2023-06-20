@@ -270,6 +270,76 @@ let bind_test () =
     destroy_comp weird_not_computation
   end
 
+let internals_test () =
+  begin
+    let ops = Atomic.make 0 in
+    let reset_ops () = Atomic.set ops 0 in
+    let rec sum_range ~mode ~lo ~hi xs =
+      delay @@ fun () ->
+      if hi - lo <= 1 then begin
+        xs.(lo)
+      end
+      else
+        let mid = lo + ((hi - lo) asr 1) in
+        map2 ~mode
+          ~fn:(fun x y ->
+            Atomic.incr ops;
+            Int.add x y)
+          (sum_range ~mode ~lo ~hi:mid xs)
+          (sum_range ~mode ~lo:mid ~hi xs)
+    in
+    let arr = Array.of_list [1; 2; 3; 4; 5; 6; 7; 8; 9; 10] in
+    let var_arr = Array.map (Var.create ~to_s:Int.to_string) arr in
+    let t_arr = Array.map Var.watch var_arr in
+    let sum = sum_range ~mode:`Seq ~lo:0 ~hi:(Array.length t_arr) t_arr in
+    let executor =
+      {
+        run = (fun f -> f ());
+        par_do =
+          (fun l r ->
+            let lres = l () in
+            (lres, r ()));
+      }
+    in
+    let sum_c = run ~executor sum in
+
+    Alcotest.(check int) output_check 55 (value sum_c);
+
+    (*
+    Following the execution of sum_range function, we can figure out the number of
+      addition operations
+
+       Roughly looks like the following:
+
+                             0,10
+                 0,5          |      5,10
+            0,2  |  2-5            5,7 | 7,10
+        0,1|1,2   2,3 | 3-5     5,6|6-7  7,8 | 8,10
+                        3-4|4-5                8,9|9,10
+    *)
+    Alcotest.(check int) "No of add operations executed" 9 (Atomic.get ops);
+
+    reset_ops ();
+
+    let open Var.Syntax in
+    (*This computation should cutoff early since the value of the sum of these two wont change*)
+    var_arr.(0) := 0;
+    var_arr.(1) := 3;
+
+    propagate sum_c;
+    Alcotest.(check int) "No of add operations executed" 1 (Atomic.get ops);
+
+    reset_ops ();
+
+    var_arr.(2) := !(var_arr.(2)) + 1;
+
+    propagate sum_c;
+    Alcotest.(check int) output_check 56 (value sum_c);
+    Alcotest.(check int) "No of add operations executed" 3 (Atomic.get ops);
+
+    destroy_comp sum_c
+  end
+
 let () =
   Alcotest.run "par_incr"
     [
@@ -282,5 +352,6 @@ let () =
           Alcotest.test_case "par" `Quick par_test;
           Alcotest.test_case "par_test_for_gc" `Quick par_test_for_gc;
           Alcotest.test_case "bind" `Quick bind_test;
+          Alcotest.test_case "internals" `Quick internals_test;
         ] );
     ]
