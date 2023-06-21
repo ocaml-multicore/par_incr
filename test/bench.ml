@@ -14,34 +14,32 @@ type result = {
 }
 
 let run ?(pre = Fun.id) ?(post = ignore) ?(runs = 10) ~name ~f () =
-  begin
-    assert (runs > 0);
-    let runtimes =
-      Array.init runs (fun _ ->
-          pre ();
-          let f_res, time_elapsed = time_fn ~f in
-          let () = post f_res in
-          time_elapsed)
-    in
-    let () = Array.sort Float.compare runtimes in
-    let runtime_sum = Array.fold_left (fun acc x -> acc +. x) 0. runtimes in
-    let median =
-      begin
-        if runs mod 2 = 0 then begin
-          (runtimes.((runs + 1) / 2) +. runtimes.((runs - 1) / 2)) /. 2.0
-        end
-        else runtimes.((runs + 1) / 2)
+  assert (runs > 0);
+  let runtimes =
+    Array.init runs (fun _ ->
+        pre ();
+        let f_res, time_elapsed = time_fn ~f in
+        let () = post f_res in
+        time_elapsed)
+  in
+  let () = Array.sort Float.compare runtimes in
+  let runtime_sum = Array.fold_left (fun acc x -> acc +. x) 0. runtimes in
+  let median =
+    begin
+      if runs mod 2 = 0 then begin
+        (runtimes.((runs + 1) / 2) +. runtimes.((runs - 1) / 2)) /. 2.0
       end
-    in
-    {
-      bench_name = name;
-      median_exec_time = median;
-      avg_exec_time = runtime_sum /. Float.of_int runs;
-      num_of_runs = runs;
-      shortest_exec_time = runtimes.(0);
-      longest_exec_time = runtimes.(runs - 1);
-    }
-  end
+      else runtimes.((runs + 1) / 2)
+    end
+  in
+  {
+    bench_name = name;
+    median_exec_time = median;
+    avg_exec_time = runtime_sum /. Float.of_int runs;
+    num_of_runs = runs;
+    shortest_exec_time = runtimes.(0);
+    longest_exec_time = runtimes.(runs - 1);
+  }
 
 let report res =
   let name_padding =
