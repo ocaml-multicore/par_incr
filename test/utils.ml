@@ -6,12 +6,11 @@ let seq_executor =
 let time_fn ?fn_name ~f () =
   let t = Unix.gettimeofday () in
   let res = f () in
+  let d = Unix.gettimeofday () -. t in
   let () =
     match fn_name with
-    | None -> Printf.printf "Execution time: %fs\n" (Unix.gettimeofday () -. t)
-    | Some name ->
-      Printf.printf "Execution time for %s: %fs\n" name
-        (Unix.gettimeofday () -. t)
+    | None -> Printf.printf "Execution time: %fs\n" d
+    | Some name -> Printf.printf "Execution time for %s: %fs\n" name d
   in
   res
 
