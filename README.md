@@ -46,34 +46,64 @@ easily done by using the `map` function provided by the library.
 # #require "par_incr"
 
 # open Par_incr
+```
 
+We'll start off creating a `Var.t` with value 10
+
+```ocaml
 # let x =
-    (*Create Var.t with value 10 *)
     Var.create 10
 val x : int Var.t = <abstr>
+```
 
+We can use `map` to make a computation depending on `x`, which basically returns
+`x+1`.
+
+```ocaml
 # let x_plus_1 = Par_incr.map
                  ~fn:(fun x -> x+1)
-                 (*A simple add 1 computation*)
                  (Var.watch x)
 val x_plus_1 : int t = <abstr>
+```
 
-# let seq_executor = { (*A simple executor that runs
-   computations sequentially(for demo purpose)*)
+As mentioned in [How It Works](#how-it-works) at the start, we need to create an
+`executor` to pass to the `run` function. Here we are creating a simple executor
+which doesn't do anything parallely(hence named seq_executor). You would
+implement this `executor` differently if you wanted parallelism.
+
+```ocaml
+# let seq_executor = {
         run = (fun f -> f());
         par_do=(fun l r ->
             let lres = l() in (lres, r())
         )}
 val seq_executor : executor = {run = <fun>; par_do = <fun>}
+```
 
+Now we `run` `x_plus_1` to get it's value and record all the computations
+involved in getting the value as well.
+
+```ocaml
 # let x_plus_1_comp = Par_incr.run
                     ~executor:seq_executor
                     x_plus_1
 val x_plus_1_comp : int computation = <abstr>
+```
 
+To get the value(type `'a`) out of `'a computation`, we just call `value` on it.
+
+```ocaml
 # Par_incr.value x_plus_1_comp
 - : int = 11
+```
 
+We'll change the input value(in our case `x`) and see what happens. On changing
+the input to any computation, we must run `propagate` to update the output.
+`propagate` is clever enough to not do any work if there's no need to(i.e in
+case some inputs change but the final output doesn't change, `propagate` will
+make sure to not do any extra work and stop as soon as possible).
+
+```ocaml
 # Var.set x 20 (* Change value of x to 20*)
 - : unit = ()
 
@@ -91,13 +121,21 @@ val x_plus_1_comp : int computation = <abstr>
 
 # Par_incr.value x_plus_1_comp
 - : int = 21
+```
 
+Since we are done with the computation now, we should destroy it (with
+`destroy_comp`)
+
+```ocaml
 # Par_incr.destroy_comp x_plus_1_comp
 - : unit = ()
+```
 
+Running propagate on a destroyed computation will raise an exception
+
+```ocaml
 # Par_incr.propagate
-            x_plus_1_comp (* Running propagate on
-            destroyed computation raises exception*)
+            x_plus_1_comp
 Exception: Failure "Cannot propagate destroyed/ill-formed computation".
 ```
 
@@ -117,7 +155,13 @@ val b : int Var.t = <abstr>
 
 # let c = Var.create 30
 val c : int Var.t = <abstr>
+```
 
+We can use `map2` provided by the library to add `a` `b` `c` together. There's a
+convenient syntax to achieve the same thing which can be used by opening the
+`Syntax` module. You can see that they give the same results.
+
+```ocaml
 # let abc_sum = Par_incr.map2
                 ~fn:(Int.add)
                 (Var.watch c)
@@ -147,7 +191,13 @@ val abc_sum'_comp : int computation = <abstr>
 # assert (Par_incr.value abc_sum_comp =
           Par_incr.value abc_sum'_comp)
 - : unit = ()
+```
 
+On changing the inputs, we can see that the output is updated accordingly. The
+below code snippet shows off the operators exposed by `Var.Syntax` module as
+well.
+
+```ocaml
 # Var.set a 40
 - : unit = ()
 
@@ -191,10 +241,15 @@ syntax/operators that the `Syntax` module provides.
 
 # module T = Domainslib.Task
 module T = Domainslib.Task
+```
 
+We start off by creating a parallel `executor` since we want to actually run
+things in parallel this time. This does require some `domainslib` knowledge but
+other than that this is pretty easy to understand.
+
+```ocaml
 # let get_par_executor ~num_domains () = (* A useful
              function to give us a parallel executor*)
-    let module T = Domainslib.Task in
     let pool = T.setup_pool ~num_domains () in
     let par_runner f = T.run pool f in
     let par_do l r =
@@ -208,7 +263,13 @@ val get_par_executor : num_domains:int -> unit -> T.pool * executor = <fun>
 # let pool, par_executor = get_par_executor ~num_domains:4 ()
 val pool : T.pool = <abstr>
 val par_executor : executor = {run = <fun>; par_do = <fun>}
+```
 
+In the `sum_range` function, we're dividing the array in half at each level and
+computing the sum of both halves in parallel. There's multiple ways to write
+this function and alternative ways are shown as part of the comments.
+
+```ocaml
 # let rec sum_range ~lo ~hi xs =
     Par_incr.delay @@ fun () ->
     if hi - lo = 1 then begin
@@ -236,7 +297,13 @@ val par_executor : executor = {run = <fun>; par_do = <fun>}
 
         *)
 val sum_range : lo:int -> hi:int -> int t array -> int t = <fun>
+```
 
+We'll define the array we want to sum here and run the computation with
+`par_executor` defined above. The example demonstrates input change and
+propagation as well.
+
+```ocaml
 # let arr = Array.map Var.create
                 [|1;2;3;4;5;6;7;8;9;10|]
 val arr : int Var.t array =
@@ -283,6 +350,8 @@ we use `let*` operator which is just a syntactic sugar for `bind` provided by
 > `Syntax` module. `and*` is again just a syntactic sugar for `combine`
 > operation provided by the library.
 
+First off, we define some helper functions.
+
 ```ocaml
 # let rec to_var_list xs = (*Helper function*)
     Var.create (
@@ -295,14 +364,24 @@ val to_var_list : 'a list -> ([> `Cons of 'a * 'b | `Nil ] Var.t as 'b) =
 
 # let rec to_incr_list xs = (*Helper function*)
     let open Par_incr.Syntax in
-    let+ l  = Var.watch xs in
+    let+ l  = Var.watch xs in (*map operation*)
     match l with
     | `Nil -> `Nil
     | `Cons(x,xs) -> `Cons(x, to_incr_list xs)
 val to_incr_list :
   ([< `Cons of 'b * 'a | `Nil ] Var.t as 'a) ->
   ([> `Cons of 'b * 'c | `Nil ] t as 'c) = <fun>
+```
 
+The `filter` function is then defined. It binds `xs` and returns another
+incremental based on what `xs` was. The reason we need to use `bind` here
+instead of something like `map` is because the tail of the list is also fully
+dynamic and we want the tail to be computed incrementally as well. If we're
+using map, the `~fn` passed to map is expected to be pure (pure, in our case,
+can be defined to be something doesn't use anything that is `incremental` in its
+body). The behaviour is not well-defined if `~fn` is not pure.
+
+```ocaml
 # let rec filter predicate xs =
     let open Par_incr.Syntax in
     let* l= xs in (*Syntactic sugar for bind*)
@@ -319,7 +398,11 @@ val to_incr_list :
         else xs
 val filter :
   ('a -> bool) -> ([< `Cons of 'a * 'b | `Nil ] t as 'b) -> 'a list t = <fun>
+```
 
+We can see `filter` does indeed work as expected.
+
+```ocaml
 # let var_list = to_var_list [2;3;5]
 val var_list : _[> `Cons of int * 'a | `Nil ] Var.t as 'a = <abstr>
 
