@@ -1,22 +1,23 @@
 # Par_incr - Parallel Self Adjusting Computations
 
-A simple library for parallel incremental computations. Based on [Efficient Parallel Self-Adjusting Computation](https://drive.google.com/file/d/130-sCY1YPzo4j3YAJ7EL9-MflK0l8RmJ/view?pli=1)
+A simple library for parallel incremental computations. Based on
+[Efficient Parallel Self-Adjusting Computation](https://drive.google.com/file/d/130-sCY1YPzo4j3YAJ7EL9-MflK0l8RmJ/view?pli=1)
 
 ## Example
 
 ### Add 1
 
 ```ocaml
-# #require "par_incr";;
+# #require "par_incr"
 
-# open Par_incr;;
+# open Par_incr
 
-# let x = Var.create 10;; (*Create Var.t with value 10 *)
+# let x = Var.create 10 (*Create Var.t with value 10 *)
 val x : int Var.t = <abstr>
 
 # let x_plus_1 = Par_incr.map
                  ~fn:(fun x -> x+1)
-                 (Var.watch x);; (*A simple add 1 computation*)
+                 (Var.watch x) (*A simple add 1 computation*)
 val x_plus_1 : int t = <abstr>
 
 # let seq_executor ={ (*A simple executor that runs computations sequentially(for demo purpose)*)
@@ -25,45 +26,45 @@ val x_plus_1 : int t = <abstr>
                    }
 val seq_executor : executor = {run = <fun>; par_do = <fun>}
 
-# let x_plus_1_comp = Par_incr.run ~executor:seq_executor x_plus_1 ;;
+# let x_plus_1_comp = Par_incr.run ~executor:seq_executor x_plus_1
 val x_plus_1_comp : int computation = <abstr>
 
-# Par_incr.value x_plus_1_comp;;
+# Par_incr.value x_plus_1_comp
 - : int = 11
 
-# Var.set x 20;; (* Change value of x to 20*)
+# Var.set x 20 (* Change value of x to 20*)
 - : unit = ()
 
-# Par_incr.propagate x_plus_1_comp;; (* Propagate changes*)
+# Par_incr.propagate x_plus_1_comp (* Propagate changes*)
 - : unit = ()
 
-# Par_incr.value x_plus_1_comp;;
+# Par_incr.value x_plus_1_comp
 - : int = 21
 
-# Par_incr.propagate x_plus_1_comp;; (* Propagating when there's no changes will do nothing*)
+# Par_incr.propagate x_plus_1_comp (* Propagating when there's no changes will do nothing*)
 - : unit = ()
 
-# Par_incr.value x_plus_1_comp;;
+# Par_incr.value x_plus_1_comp
 - : int = 21
 
-# Par_incr.destroy_comp x_plus_1_comp;;
+# Par_incr.destroy_comp x_plus_1_comp
 - : unit = ()
 
 # Par_incr.propagate x_plus_1_comp (* Running propagate on
-                destroyed computation raises exception*);;
+                destroyed computation raises exception*)
 Exception: Failure "Cannot propagate destroyed/ill-formed computation".
 ```
 
 ### Adding 3 numbers
 
 ```ocaml
-# let a = Var.create 10;;
+# let a = Var.create 10
 val a : int Var.t = <abstr>
 
-# let b = Var.create 20;;
+# let b = Var.create 20
 val b : int Var.t = <abstr>
 
-# let c = Var.create 30;;
+# let c = Var.create 30
 val c : int Var.t = <abstr>
 
 # let abc_sum = Par_incr.map2
@@ -72,7 +73,7 @@ val c : int Var.t = <abstr>
                 (Par_incr.map2
                     ~fn:(Int.add)
                     (Var.watch a)
-                    (Var.watch b));;
+                    (Var.watch b))
 val abc_sum : int t = <abstr>
 
 # let abc_sum' = (*If we open Syntax module, we can write this more cleanly*)
@@ -81,25 +82,24 @@ val abc_sum : int t = <abstr>
     and+ b = Var.watch b
     and+ c = Var.watch c in
     a + b + c
-    ;;
 val abc_sum' : int t = <abstr>
 
-# let abc_sum_comp = Par_incr.run ~executor:seq_executor abc_sum;;
+# let abc_sum_comp = Par_incr.run ~executor:seq_executor abc_sum
 val abc_sum_comp : int computation = <abstr>
 
-# let abc_sum'_comp = Par_incr.run ~executor:seq_executor abc_sum';;
+# let abc_sum'_comp = Par_incr.run ~executor:seq_executor abc_sum'
 val abc_sum'_comp : int computation = <abstr>
 
-# assert (Par_incr.value abc_sum_comp = Par_incr.value abc_sum'_comp);;
+# assert (Par_incr.value abc_sum_comp = Par_incr.value abc_sum'_comp)
 - : unit = ()
 
-# Var.set a 40;;
+# Var.set a 40
 - : unit = ()
 
-# Par_incr.propagate abc_sum'_comp;;
+# Par_incr.propagate abc_sum'_comp
 - : unit = ()
 
-# Par_incr.value abc_sum'_comp;;
+# Par_incr.value abc_sum'_comp
 - : int = 90
 
 # let () =(*Var.Syntax module provides some convenient operators*)
@@ -107,25 +107,25 @@ val abc_sum'_comp : int computation = <abstr>
     (*Equivalent to Var.set b (Var.value b + Var.value b) *)
     b := (!b) + (!b);
 
-# Par_incr.propagate abc_sum'_comp; Par_incr.propagate abc_sum_comp;;
+# Par_incr.propagate abc_sum'_comp; Par_incr.propagate abc_sum_comp
 - : unit = ()
 
-# Par_incr.value abc_sum'_comp;;
+# Par_incr.value abc_sum'_comp
 - : int = 110
 
-# assert (Par_incr.value abc_sum'_comp = Par_incr.value abc_sum_comp );;
+# assert (Par_incr.value abc_sum'_comp = Par_incr.value abc_sum_comp )
 - : unit = ()
 
-# Par_incr.destroy_comp abc_sum_comp ; Par_incr.destroy_comp abc_sum'_comp;;
+# Par_incr.destroy_comp abc_sum_comp ; Par_incr.destroy_comp abc_sum'_comp
 - : unit = ()
 ```
 
 ### Exploiting Parallelism
 
 ```ocaml
-# #require "domainslib";;
+# #require "domainslib"
 
-# module T = Domainslib.Task;;
+# module T = Domainslib.Task
 module T = Domainslib.Task
 
 # let get_par_executor ~num_domains () = (*Let's define a useful function to give us parallel executor*)
@@ -140,7 +140,7 @@ module T = Domainslib.Task
     (pool, {run = par_runner; par_do})
 val get_par_executor : num_domains:int -> unit -> T.pool * executor = <fun>
 
-# let pool, par_executor = get_par_executor ~num_domains:4 () ;;
+# let pool, par_executor = get_par_executor ~num_domains:4 ()
 val pool : T.pool = <abstr>
 val par_executor : executor = {run = <fun>; par_do = <fun>}
 
@@ -162,41 +162,41 @@ val par_executor : executor = {run = <fun>; par_do = <fun>}
         *)
 val sum_range : lo:int -> hi:int -> int t array -> int t = <fun>
 
-# let arr = Array.map Var.create [|1;2;3;4;5;6;7;8;9;10|];;
+# let arr = Array.map Var.create [|1;2;3;4;5;6;7;8;9;10|]
 val arr : int Var.t array =
   [|<abstr>; <abstr>; <abstr>; <abstr>; <abstr>; <abstr>; <abstr>; <abstr>;
     <abstr>; <abstr>|]
 
-# let t_arr = Array.map Var.watch arr;;
+# let t_arr = Array.map Var.watch arr
 val t_arr : int t array =
   [|<abstr>; <abstr>; <abstr>; <abstr>; <abstr>; <abstr>; <abstr>; <abstr>;
     <abstr>; <abstr>|]
 
-# let arr_sum = sum_range ~lo:0 ~hi:(Array.length t_arr) t_arr;;
+# let arr_sum = sum_range ~lo:0 ~hi:(Array.length t_arr) t_arr
 val arr_sum : int t = <abstr>
 
-# let arr_sum_comp = run ~executor:par_executor arr_sum;;
+# let arr_sum_comp = run ~executor:par_executor arr_sum
 val arr_sum_comp : int computation = <abstr>
 
-# Par_incr.value arr_sum_comp;;
+# Par_incr.value arr_sum_comp
 - : int = 55
 
-# Var.set arr.(0) 11;;
+# Var.set arr.(0) 11
 - : unit = ()
 
-# Par_incr.propagate arr_sum_comp; Par_incr.value arr_sum_comp;;
+# Par_incr.propagate arr_sum_comp; Par_incr.value arr_sum_comp
 - : int = 65
 
-# Par_incr.destroy_comp arr_sum_comp;;
+# Par_incr.destroy_comp arr_sum_comp
 - : unit = ()
 ```
 
 ### Filtering a Cons List
 
-Although this example is very inefficient, it helps us realize why we need the `bind` operation.
-All other operations only builds static computation trees, but for writing complex computations
-,like an incremental filter which adapts to changes in the list, we need dynamism. We get that
-with `bind`.
+Although this example is very inefficient, it helps us realize why we need the
+`bind` operation. All other operations only builds static computation trees, but
+for writing complex computations ,like an incremental filter which adapts to
+changes in the list, we need dynamism. We get that with `bind`.
 
 ```ocaml
 # let rec to_var_list xs = (*Helper function*)
@@ -224,19 +224,19 @@ val to_incr_list :
 val filter :
   ('a -> bool) -> ([< `Cons of 'a * 'b | `Nil ] t as 'b) -> 'a list t = <fun>
 
-# let var_list = to_var_list [2;3;5];;
+# let var_list = to_var_list [2;3;5]
 val var_list : _[> `Cons of int * 'a | `Nil ] Var.t as 'a = <abstr>
 
-# let incr_list = to_incr_list var_list;;
+# let incr_list = to_incr_list var_list
 val incr_list : _[> `Cons of int * 'a | `Nil ] t as 'a = <abstr>
 
-# let res_list = filter (fun x -> x mod 2 = 1) incr_list;;
+# let res_list = filter (fun x -> x mod 2 = 1) incr_list
 val res_list : int list t = <abstr>
 
-# let filter_comp = Par_incr.run ~executor:seq_executor res_list;;
+# let filter_comp = Par_incr.run ~executor:seq_executor res_list
 val filter_comp : int list computation = <abstr>
 
-# Par_incr.value filter_comp;;
+# Par_incr.value filter_comp
 - : int list = [3; 5]
 
 # let () =
@@ -247,12 +247,12 @@ val filter_comp : int list computation = <abstr>
         | `Cons(x,xs) -> `Cons(5, xs)
     )
 
-# Par_incr.propagate filter_comp; Par_incr.value filter_comp;;
+# Par_incr.propagate filter_comp; Par_incr.value filter_comp
 - : int list = [5; 3; 5]
 
-# Par_incr.destroy_comp filter_comp;;
+# Par_incr.destroy_comp filter_comp
 - : unit = ()
 
-# T.teardown_pool pool;; (*Teardown the domainslib Task pool we created before*)
+# T.teardown_pool pool (*Teardown the domainslib Task pool we created before*)
 - : unit = ()
 ```
