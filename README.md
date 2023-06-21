@@ -423,11 +423,9 @@ val filter_comp : int list computation = <abstr>
 # let () =
     let open Var.Syntax in
     (*Let's change first element to 5 and see what happens*)
-    var_list := (
-       match !var_list with
-        | `Nil -> failwith "Impossible"
-        | `Cons(x,xs) -> `Cons(5, xs)
-    )
+    match !var_list with
+    | `Nil -> failwith "Impossible"
+    | `Cons(x,xs) -> var_list:= `Cons(5, xs)
 
 # Par_incr.propagate filter_comp;
   Par_incr.value filter_comp
