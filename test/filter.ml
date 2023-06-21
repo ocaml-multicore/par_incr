@@ -20,37 +20,37 @@ let speclist =
 let () = Arg.parse speclist ignore usage_msg
 let pool, par_executor = Utils.get_par_executor ~num_domains:4 ()
 
-type 'a lst = Nil | Cons of 'a * 'a lst ref
+type 'a lst = Nil | Cons of {value : 'a; mutable rest : 'a lst}
 
 let[@tail_mod_cons] rec lst_to_list l =
-  match l with Nil -> [] | Cons (x, xs) -> x :: lst_to_list !xs
+  match l with Nil -> [] | Cons {value; rest} -> value :: lst_to_list rest
 
 let lst_eq a b =
   let x, _ = a in
   let y, _ = b in
   match (x, y) with Nil, Nil -> true | _ -> false
 
+let set_rest lst rest = match lst with Nil -> () | Cons l -> l.rest <- rest
+
 let filter ~mode ~fn (xs : int Incr.t list) =
   let f : 'a -> (int -> 'a) -> ('a -> 'a -> 'a) -> int Incr.t list -> 'a t =
     Utils.reduce_lst ~eq:lst_eq ~mode
   in
-  f
-    (Nil, Obj.magic ())
+  f (Nil, Nil)
     (fun x ->
       if fn x then begin
-        let last_el = ref Nil in
-        (Cons (x, last_el), last_el)
+        let res = Cons {value = x; rest = Nil} in
+        (res, res)
       end
-      else (Nil, Obj.magic ()))
+      else (Nil, Nil))
     (fun (x, xlast) (y, ylast) ->
       match (x, y) with
-      | Nil, Nil -> (Nil, Obj.magic ())
-      | Nil, Cons (_, _) -> (y, ylast)
-      | Cons (_, _), Nil ->
-        xlast := y;
+      | Nil, _ -> (y, ylast)
+      | Cons _, Nil ->
+        set_rest xlast y;
         (x, xlast)
       | _ ->
-        xlast := y;
+        set_rest xlast y;
         (x, ylast))
     xs
 

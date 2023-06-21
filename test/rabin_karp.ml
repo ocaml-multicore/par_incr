@@ -10,16 +10,18 @@ let ( *% ) x y = x * y mod prime_mod
 let ( +% ) x y = (x + y) mod prime_mod
 
 module Hash = struct
-  type t = {result : int; acc : int}
+  type t = {mutable result : int; mutable acc : int}
 
   let hash_chunk chnk =
-    Bytes.fold_left
-      (fun {result; acc} c ->
+    let t = {result = 0; acc = 1} in
+    Bytes.iter
+      (fun c ->
+        let {result; acc} = t in
         let c' = Char.code c in
-        let res' = (result *% b) +% c' in
-        let acc' = acc *% b in
-        {result = res'; acc = acc'})
-      {result = 0; acc = 1} chnk
+        t.result <- (result *% b) +% c';
+        t.acc <- acc *% b)
+      chnk;
+    t
 
   let merge l r =
     {result = (l.result *% r.acc) +% r.result; acc = l.acc *% r.acc}
