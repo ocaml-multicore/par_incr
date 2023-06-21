@@ -10,11 +10,11 @@ let no_of_input_changes = ref 5
 
 let speclist =
   [
-    ("-n", Arg.Set_int no_of_entries, "No. of elements in list(Default:1000)");
-    ("-r", Arg.Set_int runs, "No. of runs for benchmarking(Default:10)");
+    ("-n", Arg.Set_int no_of_entries, "No. of elements in list (Default: 1000)");
+    ("-r", Arg.Set_int runs, "No. of runs for benchmarking (Default: 10)");
     ( "-c",
       Arg.Set_int no_of_input_changes,
-      "No. of changes to make to input before propagating(Default:5)" );
+      "No. of changes to make to input before propagating (Default: 5)" );
   ]
 
 let () = Arg.parse speclist ignore usage_msg
