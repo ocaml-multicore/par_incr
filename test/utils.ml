@@ -42,7 +42,7 @@ let reduce_arr ~mode ?(eq = ( == )) (zero : 'a) (one : 'b -> 'a)
 
 let reduce_lst ~mode ?(eq = ( == )) (zero : 'a) (one : 'b -> 'a)
     (plus : 'a -> 'a -> 'a) (l : 'b Incr.t list) : 'a Incr.t =
-  (*Code highly inspired from Base.List.reduced_balanced*)
+  (* Code highly inspired from Base.List.reduced_balanced. *)
   let rec step_accum' num acc x =
     if num land 1 = 0 then x :: acc
       (* (Incr.Debug.attach ~fn:to_s @@ Incr.map ~eq ~fn:Fun.id x) :: acc *)
@@ -59,9 +59,9 @@ let reduce_lst ~mode ?(eq = ( == )) (zero : 'a) (one : 'b -> 'a)
     else
       match acc with
       | [] -> assert false
-      (* New elements from later in the input list go on the front of the accumulator, so
-         the accumulator is in reverse order wrt the original list order, hence [f y x]
-         instead of [f x y]. *)
+      (* New elements from later in the input list go on the front of the
+         accumulator, so the accumulator is in reverse order wrt the original
+         list order, hence [f y x] instead of [f x y]. *)
       | y :: ys ->
         step_accum' (num asr 1) ys
           ( Incr.delay @@ fun () ->
