@@ -13,6 +13,7 @@ depends: [
   "dune" {>= "3.6"}
   "domainslib"
   "alcotest" {with-test}
+  "mdx" {with-test}
   "odoc" {with-doc}
 ]
 build: [
