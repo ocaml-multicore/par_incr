@@ -3,8 +3,8 @@ name: build-and-test
 on:
   pull_request:
   push:
-    branches-ignore:
-      - gh-pages
+    branches:
+      - main
 
 jobs:
   build:
