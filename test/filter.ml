@@ -54,23 +54,51 @@ let filter ~mode ~fn (xs : int Incr.t list) =
         (x, ylast))
     xs
 
+let current_incr_filter ~fn (xs : int Current_incr.t list) =
+  let f :
+      'a ->
+      (int -> 'a) ->
+      ('a -> 'a -> 'a) ->
+      int Current_incr.t list ->
+      'a Current_incr.t =
+    Utils.reduce_ci_lst ~eq:lst_eq
+  in
+  f (Nil, Nil)
+    (fun x ->
+      if fn x then begin
+        let res = Cons {value = x; rest = Nil} in
+        (res, res)
+      end
+      else (Nil, Nil))
+    (fun (x, xlast) (y, ylast) ->
+      match (x, y) with
+      | Nil, _ -> (y, ylast)
+      | Cons _, Nil ->
+        set_rest xlast y;
+        (x, xlast)
+      | _ ->
+        set_rest xlast y;
+        (x, ylast))
+    xs
+
 let () = Random.self_init ()
 let lst = List.init !no_of_entries (fun _ -> !no_of_entries |> Random.int)
-let arr = Array.of_list lst
 let var_lst = List.map Var.create lst
 let t_lst = List.map Var.watch var_lst
+let ci_var_lst = List.map Current_incr.var lst
+let ci_t_lst = List.map Current_incr.of_var ci_var_lst
 let runs = !runs
 
 (*Saving keystrokes *)
 let run_incr = Incr.run ~executor:par_executor
 
-let change_inputs () =
+let change_inputs ~for' () =
   for _ = 1 to !no_of_input_changes do
     let index = Random.int !no_of_entries in
-    let var = List.nth var_lst index in
     let new_val = Random.int !no_of_entries in
-    Var.set var new_val;
-    arr.(index) <- new_val
+    match for' with
+    | `Par_incr -> Var.set (List.nth var_lst index) new_val
+    | `Current_incr -> Current_incr.change (List.nth ci_var_lst index) new_val
   done
 
 let () =
@@ -106,18 +134,32 @@ let () =
         destroy_comp c)
       ()
   in
+
+  let ci_filter_initial_cons =
+    Bench.run ~runs ~name:"current-incr-filter-init-cons"
+      ~f:(fun () -> current_incr_filter ~fn:(fun x -> x mod 2 = 0) ci_t_lst)
+      ~post:(fun c ->
+        let lst, _ = Current_incr.observe c in
+
+        assert (lst_to_list lst = !expected_res);
+        Gc.full_major ())
+      ()
+  in
+
   let filter_seq_comp =
     run_incr (filter ~mode:`Seq ~fn:(fun x -> x mod 2 = 0) t_lst)
   in
   let incr_seq_filter_change_prop =
-    Bench.run ~name:"incr-seq-filter-change-prop" ~pre:change_inputs ~runs
+    Bench.run ~name:"incr-seq-filter-change-prop"
+      ~pre:(change_inputs ~for':`Par_incr)
+      ~runs
       ~f:(fun () -> propagate filter_seq_comp)
       ~post:(fun _ ->
         let lst, _ = Incr.value filter_seq_comp in
 
         let res_list = lst_to_list lst in
         let exp_list =
-          arr |> Array.to_list |> List.filter (fun x -> x mod 2 = 0)
+          var_lst |> List.map Var.value |> List.filter (fun x -> x mod 2 = 0)
         in
 
         assert (res_list = exp_list))
@@ -129,26 +171,52 @@ let () =
     run_incr (filter ~mode:`Par ~fn:(fun x -> x mod 2 = 0) t_lst)
   in
   let incr_par_filter_change_prop =
-    Bench.run ~name:"incr-par-filter-change-prop" ~pre:change_inputs ~runs
+    Bench.run ~name:"incr-par-filter-change-prop"
+      ~pre:(change_inputs ~for':`Par_incr)
+      ~runs
       ~f:(fun () -> propagate filter_par_comp)
       ~post:(fun _ ->
         let lst, _ = Incr.value filter_par_comp in
 
         let res_list = lst_to_list lst in
         let exp_list =
-          arr |> Array.to_list |> List.filter (fun x -> x mod 2 = 0)
+          var_lst |> List.map Var.value |> List.filter (fun x -> x mod 2 = 0)
         in
 
         assert (res_list = exp_list))
       ()
   in
   destroy_comp filter_par_comp;
+
+  let ci_filter = current_incr_filter ~fn:(fun x -> x mod 2 = 0) ci_t_lst in
+
+  let ci_filter_change_prop =
+    Bench.run ~name:"current-incr-filter-change-prop"
+      ~pre:(change_inputs ~for':`Current_incr)
+      ~runs
+      ~f:(fun () -> Current_incr.propagate ())
+      ~post:(fun _ ->
+        let lst, _ = Current_incr.observe ci_filter in
+
+        let res_list = lst_to_list lst in
+        let exp_list =
+          ci_t_lst
+          |> List.map Current_incr.observe
+          |> List.filter (fun x -> x mod 2 = 0)
+        in
+
+        assert (res_list = exp_list))
+      ()
+  in
+
   Bench.report
     [
       static_filter;
       incr_seq_filter_initial_cons;
       incr_par_filter_initial_cons;
+      ci_filter_initial_cons;
       incr_seq_filter_change_prop;
       incr_par_filter_change_prop;
+      ci_filter_change_prop;
     ];
   T.teardown_pool pool

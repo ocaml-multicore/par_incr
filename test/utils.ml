@@ -40,6 +40,23 @@ let reduce_arr ?mode ?eq (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
     in
     reduce 0 n
 
+let reduce_ci_arr ?eq (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
+    (xs : 'b Current_incr.t array) : 'a Current_incr.t =
+  let open Current_incr in
+  let n = Array.length xs in
+  if n = 0 then const zero
+  else
+    let rec reduce lo hi =
+      let delta = hi - lo in
+      if delta = 1 then map ?eq one xs.(lo)
+      else
+        let mid = lo + (delta asr 1) in
+        of_cc
+        @@ read (reduce lo mid) (fun x ->
+               read (reduce mid hi) (fun y -> write (plus x y)))
+    in
+    reduce 0 n
+
 let reduce_lst ?mode ?eq (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
     (l : 'b Incr.t list) : 'a Incr.t =
   (* Code highly inspired from Base.List.reduced_balanced. *)
@@ -78,3 +95,52 @@ let reduce_lst ?mode ?eq (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
   List.fold_left
     (fun x y -> Incr.delay @@ fun () -> Incr.map2 ?eq ~fn:plus y x)
     (Incr.return zero) res
+
+let reduce_ci_lst ?eq (zero : 'a) (one : 'b -> 'a) (plus : 'a -> 'a -> 'a)
+    (l : 'b Current_incr.t list) : 'a Current_incr.t =
+  (* Code highly inspired from Base.List.reduced_balanced. *)
+  let rec step_accum' num acc x =
+    if num land 1 = 0 then x :: acc
+    else
+      match acc with
+      | [] -> assert false
+      | y :: ys ->
+        step_accum' (num asr 1) ys
+          (Current_incr.of_cc
+          @@ Current_incr.read y (fun y ->
+                 Current_incr.read x (fun x ->
+                     Current_incr.write ?eq (plus y x))))
+  in
+  let step_accum num acc x =
+    if num land 1 = 0 then Current_incr.map ?eq one x :: acc
+    else
+      match acc with
+      | [] -> assert false
+      (* New elements from later in the input list go on the front of the
+         accumulator, so the accumulator is in reverse order wrt the original
+         list order, hence [f y x] instead of [f x y]. *)
+      | y :: ys ->
+        step_accum' (num asr 1) ys
+          (Current_incr.of_cc
+          @@ Current_incr.read y (fun y ->
+                 Current_incr.read (Current_incr.map ?eq one x) (fun x ->
+                     Current_incr.write ?eq (plus y x))))
+  in
+  let foldi (l : 'b Current_incr.t list) ~(init : 'a Current_incr.t list)
+      ~(f :
+         int ->
+         'a Current_incr.t list ->
+         'b Current_incr.t ->
+         'a Current_incr.t list) =
+    let v, _ =
+      List.fold_left (fun (acc, i) x -> (f i acc x, i + 1)) (init, 0) l
+    in
+    v
+  in
+  let res : 'a Current_incr.t list = foldi l ~init:[] ~f:step_accum in
+  List.fold_left
+    (fun x y ->
+      Current_incr.of_cc
+      @@ Current_incr.read y (fun y ->
+             Current_incr.read x (fun x -> Current_incr.write ?eq (plus y x))))
+    (Current_incr.const zero) res

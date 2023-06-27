@@ -44,18 +44,34 @@ let rec sum_range_par ~lo ~hi xs =
     and& rhalf = sum_range_par ~lo:mid ~hi xs in
     lhalf + rhalf
 
+let rec sum_range' ~lo ~hi xs =
+  let open Current_incr in
+  let delta = hi - lo in
+  if delta = 1 then xs.(lo)
+  else
+    let mid = lo + (delta asr 1) in
+    let lhalf = sum_range' ~lo ~hi:mid xs in
+    let rhalf = sum_range' ~lo:mid ~hi xs in
+    of_cc
+    @@ read lhalf (fun l -> Current_incr.read rhalf (fun r -> write (l + r)))
+
 let () = Random.self_init ()
 let arr = Array.init !no_of_entries (fun _ -> !no_of_entries |> Random.int)
 let var_arr = Array.map Var.create arr
 let t_arr = Array.map Var.watch var_arr
+let ci_var_arr = Array.map Current_incr.var arr
+let ci_t_arr = Array.map Current_incr.of_var ci_var_arr
 let sum_par = sum_range_par ~lo:0 ~hi:!no_of_entries t_arr
 let sum_seq = sum_range ~lo:0 ~hi:!no_of_entries t_arr
 
-let change_inputs () =
+let change_inputs ~for' () =
   let n = !no_of_input_changes in
   for _ = 1 to n do
     let index = !no_of_entries |> Random.int in
-    Var.set var_arr.(index) (Random.int !no_of_entries)
+    match for' with
+    | `Current_incr ->
+      Current_incr.change ci_var_arr.(index) (Random.int !no_of_entries)
+    | `Par_incr -> Var.set var_arr.(index) (Random.int !no_of_entries)
   done
 
 let runs = !runs
@@ -91,11 +107,21 @@ let () =
         destroy_comp c)
       ()
   in
+
+  let current_incr_arr_sum_initial_cons =
+    Bench.run ~name:"current-incr-arr-sum-initial-cons" ~runs
+      ~f:(fun () -> sum_range' ~lo:0 ~hi:!no_of_entries ci_t_arr)
+      ~post:(fun t ->
+        assert (Current_incr.observe t = !sum_result);
+        Gc.full_major ())
+      ()
+  in
+
   let seq_comp = run_incr sum_seq in
   let incr_seq_arr_sum_prop =
     Bench.run ~name:"incr-seq-arr-sum-prop"
       ~pre:(fun () ->
-        change_inputs ();
+        change_inputs ~for':`Par_incr ();
         sum_result := Array.fold_left (fun acc x -> acc + Var.value x) 0 var_arr)
       ~runs
       ~f:(fun () -> propagate seq_comp)
@@ -108,7 +134,7 @@ let () =
   let incr_par_arr_sum_prop =
     Bench.run ~name:"incr-par-arr-sum-prop"
       ~pre:(fun () ->
-        change_inputs ();
+        change_inputs ~for':`Par_incr ();
         sum_result := Array.fold_left (fun acc x -> acc + Var.value x) 0 var_arr)
       ~runs
       ~f:(fun () -> propagate par_comp)
@@ -116,13 +142,30 @@ let () =
       ()
   in
   destroy_comp par_comp;
+  let ci_comp = sum_range' ~lo:0 ~hi:!no_of_entries ci_t_arr in
+  let current_incr_arr_sum_prop =
+    Bench.run ~name:"current-incr-arr-sum-prop" ~runs
+      ~pre:(fun () ->
+        change_inputs ~for':`Current_incr ();
+        sum_result :=
+          Array.fold_left
+            (fun acc x ->
+              acc + (x |> Current_incr.of_var |> Current_incr.observe))
+            0 ci_var_arr)
+      ~f:(fun () -> Current_incr.propagate ())
+      ~post:(fun _ -> assert (Current_incr.observe ci_comp = !sum_result))
+      ()
+  in
+
   Bench.report
     [
       static_seq_arr_sum;
       incr_seq_arr_sum_initial_cons;
       incr_par_arr_sum_initial_cons;
+      current_incr_arr_sum_initial_cons;
       incr_seq_arr_sum_prop;
       incr_par_arr_sum_prop;
+      current_incr_arr_sum_prop;
     ]
 
 let () = T.teardown_pool pool

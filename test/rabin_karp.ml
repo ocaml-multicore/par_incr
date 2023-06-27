@@ -58,8 +58,10 @@ let chunks =
          else chunk_size)
         ())
 
-let chunks_var = Array.map Var.create chunks
-let chunks_incr = Array.map Var.watch chunks_var
+let var_chunks = Array.map Var.create chunks
+let t_chunks = Array.map Var.watch var_chunks
+let ci_var_chunks = Array.map Current_incr.var chunks
+let ci_t_chunks = Array.map Current_incr.of_var ci_var_chunks
 
 let rabin_karp_static_par chunks =
   let rec f l r =
@@ -74,22 +76,38 @@ let rabin_karp_static_par chunks =
   in
   par_executor.run (fun () -> f 0 (Array.length chunks))
 
+let rabin_karp_current_incr chunks =
+  let open Current_incr in
+  let rec f l r =
+    let delta = r - l in
+    if delta = 1 then map Hash.hash_chunk chunks.(l)
+    else
+      let mid = l + (delta asr 1) in
+      let lhash, rhash = (f l mid, f mid r) in
+      of_cc
+      @@ read lhash (fun lhash ->
+             read rhash (fun rhash -> write @@ Hash.merge lhash rhash))
+  in
+  f 0 (Array.length chunks)
+
 let rabin_karp_incr ~mode chunks =
   Utils.reduce_arr ~mode
     Hash.{result = 0; acc = 1}
     (fun x -> Hash.hash_chunk x)
     Hash.merge chunks
 
-let change_inputs () =
+let change_inputs ~for' () =
   for _ = 1 to !no_of_input_changes do
     let index = Random.int no_of_chunks in
     let chunk = chunks.(index) in
     let chunk' = random_chunk (Bytes.length chunk) () in
-    chunks.(index) <- chunk';
-    Var.set chunks_var.(index) chunk'
+    match for' with
+    | `Current_incr -> Current_incr.change ci_var_chunks.(index) chunk'
+    | `Par_incr -> Var.set var_chunks.(index) chunk'
   done
 
 let run_incr = Incr.run ~executor:par_executor
+let runs = !runs
 
 let () =
   Printf.printf
@@ -98,53 +116,81 @@ let () =
     !no_of_char chunk_size !no_of_input_changes;
   let hash_result = ref Hash.{result = 0; acc = 1} in
   let static_par =
-    Bench.run ~name:"static-par-rk"
+    Bench.run ~runs ~name:"static-par-rk"
       ~f:(fun () -> rabin_karp_static_par chunks)
       ~post:(fun res -> hash_result := res)
       ()
   in
   let incr_seq_initial_cons =
-    Bench.run ~name:"incr-seq-rk-initial-cons"
-      ~f:(fun () -> run_incr (rabin_karp_incr ~mode:`Seq chunks_incr))
+    Bench.run ~runs ~name:"incr-seq-rk-initial-cons"
+      ~f:(fun () -> run_incr (rabin_karp_incr ~mode:`Seq t_chunks))
       ~post:(fun c ->
         assert (Incr.value c = !hash_result);
         Incr.destroy_comp c)
       ()
   in
   let incr_par_initial_cons =
-    Bench.run ~name:"incr-par-rk-initial-cons"
-      ~f:(fun () -> run_incr (rabin_karp_incr ~mode:`Par chunks_incr))
+    Bench.run ~runs ~name:"incr-par-rk-initial-cons"
+      ~f:(fun () -> run_incr (rabin_karp_incr ~mode:`Par t_chunks))
       ~post:(fun c ->
         assert (Incr.value c = !hash_result);
         Incr.destroy_comp c)
       ()
   in
-  let incr_seq_comp = run_incr (rabin_karp_incr ~mode:`Seq chunks_incr) in
+  let ci_initial_cons =
+    Bench.run ~runs ~name:"current-incr-rk-initial-cons"
+      ~f:(fun () -> rabin_karp_current_incr ci_t_chunks)
+      ~post:(fun c ->
+        assert (Current_incr.observe c = !hash_result);
+        Gc.full_major ())
+      ()
+  in
+  let incr_seq_comp = run_incr (rabin_karp_incr ~mode:`Seq t_chunks) in
   let incr_seq_prop =
-    Bench.run ~name:"incr-seq-rk-prop" ~pre:change_inputs
+    Bench.run ~runs ~name:"incr-seq-rk-prop"
+      ~pre:(change_inputs ~for':`Par_incr)
       ~f:(fun () -> Incr.propagate incr_seq_comp)
       ~post:(fun _ ->
-        assert (Incr.value incr_seq_comp = rabin_karp_static_par chunks))
+        assert (
+          Incr.value incr_seq_comp
+          = rabin_karp_static_par (var_chunks |> Array.map Var.value)))
       ()
   in
   destroy_comp incr_seq_comp;
 
-  let incr_par_comp = run_incr (rabin_karp_incr ~mode:`Par chunks_incr) in
+  let incr_par_comp = run_incr (rabin_karp_incr ~mode:`Par t_chunks) in
   let incr_par_prop =
-    Bench.run ~name:"incr-par-rk-prop" ~pre:change_inputs
+    Bench.run ~runs ~name:"incr-par-rk-prop"
+      ~pre:(change_inputs ~for':`Par_incr)
       ~f:(fun () -> Incr.propagate incr_par_comp)
       ~post:(fun _ ->
-        assert (Incr.value incr_par_comp = rabin_karp_static_par chunks))
+        assert (
+          Incr.value incr_par_comp
+          = rabin_karp_static_par (var_chunks |> Array.map Var.value)))
       ()
   in
   destroy_comp incr_par_comp;
+
+  let ci_comp = rabin_karp_current_incr ci_t_chunks in
+  let ci_prop =
+    Bench.run ~runs ~name:"current-incr-rk-prop"
+      ~pre:(change_inputs ~for':`Current_incr)
+      ~f:(fun () -> Current_incr.propagate ())
+      ~post:(fun _ ->
+        assert (
+          Current_incr.observe ci_comp
+          = rabin_karp_static_par (ci_t_chunks |> Array.map Current_incr.observe)))
+      ()
+  in
 
   Bench.report
     [
       static_par;
       incr_seq_initial_cons;
       incr_par_initial_cons;
+      ci_initial_cons;
       incr_seq_prop;
       incr_par_prop;
+      ci_prop;
     ];
   T.teardown_pool pool

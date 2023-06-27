@@ -14,12 +14,11 @@
 (license MIT)
 
 (documentation https://ocaml-multicore.github.io/par_incr/par_incr/index.html)
-
 (package
  (name par_incr)
  (synopsis "Parallel Self Adjusting Computation")
  (description "A library for incremental computation, with support for parallelism")
- (depends ocaml dune domainslib (alcotest :with-test) (mdx :with-test))
+ (depends ocaml dune (domainslib :with-test) (alcotest :with-test) (mdx :with-test) (current_incr :with-test))
  (tags
   (ocaml incremental "multicore-ocaml")
 ))

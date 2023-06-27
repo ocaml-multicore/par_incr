@@ -45,6 +45,22 @@ let inf = Int.max_int
 let min_distance tgt words ~mode =
   Utils.reduce_arr ~mode inf (fun word -> edit_distance tgt word) min words
 
+let min_distance' tgt xs =
+  let open Current_incr in
+  let rec f lo hi =
+    let delta = hi - lo in
+    if delta = 1 then
+      of_cc @@ read xs.(lo) (fun word -> write (edit_distance tgt word))
+    else
+      let mid = lo + (delta asr 1) in
+      let lhalf = f lo mid in
+      let rhalf = f mid hi in
+      of_cc
+      @@ read lhalf (fun l ->
+             Current_incr.read rhalf (fun r -> write (min l r)))
+  in
+  f 0 (Array.length xs)
+
 let par_static_min_edit_distance tgt words =
   par_executor.run (fun () ->
       T.parallel_for_reduce ~start:0
@@ -58,16 +74,19 @@ let target_word = get_random_string word_len
 let rand_words = Array.init !no_of_entries (fun _ -> get_random_string word_len)
 let rand_var_words = Array.map Var.create rand_words
 let rand_t_words = Array.map Var.watch rand_var_words
+let rand_ci_var_words = Array.map Current_incr.var rand_words
+let rand_ci_t_words = Array.map Current_incr.of_var rand_ci_var_words
 
 (* Saving keystrokes *)
 let run_incr = Incr.run ~executor:par_executor
 
-let change_some_words () =
+let change_some_words ~for' () =
   for _ = 0 to !no_of_input_changes do
     let new_str = get_random_string word_len in
     let ind = Random.int !no_of_entries in
-    let () = rand_words.(ind) <- new_str in
-    Var.set rand_var_words.(ind) new_str
+    match for' with
+    | `Current_incr -> Current_incr.change rand_ci_var_words.(ind) new_str
+    | `Par_incr -> Var.set rand_var_words.(ind) new_str
   done
 
 let () =
@@ -111,17 +130,27 @@ let () =
       ()
   in
 
+  let ci_init =
+    Bench.run ~runs ~name:"current-incr-spellcheck-initial-cons"
+      ~f:(fun () -> min_distance' target_word rand_ci_t_words)
+      ~post:(fun t ->
+        assert (Current_incr.observe t = !static_par_res);
+        Gc.full_major ())
+      ()
+  in
+
   let incr_seq_spellcheck_comp =
     run_incr (min_distance ~mode:`Seq target_word rand_t_words)
   in
   let incr_seq_spellcheck_prop =
     Bench.run ~runs ~name:"incr-seq-spellcheck-change-prop"
-      ~pre:change_some_words
+      ~pre:(change_some_words ~for':`Par_incr)
       ~f:(fun () -> Incr.propagate incr_seq_spellcheck_comp)
       ~post:(fun _ ->
         assert (
           Incr.value incr_seq_spellcheck_comp
-          = par_static_min_edit_distance target_word rand_words))
+          = par_static_min_edit_distance target_word
+              (rand_var_words |> Array.map Var.value)))
       ()
   in
   destroy_comp incr_seq_spellcheck_comp;
@@ -131,23 +160,38 @@ let () =
   in
   let incr_par_spellcheck_prop =
     Bench.run ~runs ~name:"incr-par-spellcheck-change-prop"
-      ~pre:change_some_words
+      ~pre:(change_some_words ~for':`Par_incr)
       ~f:(fun () -> Incr.propagate incr_par_spellcheck_comp)
       ~post:(fun _ ->
         assert (
           Incr.value incr_par_spellcheck_comp
-          = par_static_min_edit_distance target_word rand_words))
+          = par_static_min_edit_distance target_word
+              (rand_var_words |> Array.map Var.value)))
       ()
   in
   destroy_comp incr_par_spellcheck_comp;
 
+  let ci_comp = min_distance' target_word rand_ci_t_words in
+  let ci_spellcheck_prop =
+    Bench.run ~runs ~name:"current-incr-spellcheck-change-prop"
+      ~pre:(change_some_words ~for':`Current_incr)
+      ~f:(fun () -> Current_incr.propagate ())
+      ~post:(fun _ ->
+        assert (
+          Current_incr.observe ci_comp
+          = par_static_min_edit_distance target_word
+              (Array.map Current_incr.observe rand_ci_t_words)))
+      ()
+  in
   Bench.report
     [
       static_seq;
       static_par;
       incr_seq_init;
       incr_par_init;
+      ci_init;
       incr_seq_spellcheck_prop;
       incr_par_spellcheck_prop;
+      ci_spellcheck_prop;
     ];
   T.teardown_pool pool
