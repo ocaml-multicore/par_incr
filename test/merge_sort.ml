@@ -1,6 +1,8 @@
 module Incr = Par_incr
 open Incr
 module T = Domainslib.Task
+module Js_incr = Incremental.Make ()
+module M = Utils.M (Js_incr)
 
 let usage_msg = "merge_sort [-n <int>] [-r <int>] [-c <int>]"
 let no_of_entries = ref 1000
@@ -40,7 +42,12 @@ let msort_list xs =
 
 let () = assert (msort_list [3; 1; 4; 1; 5; 9; 2] = [1; 1; 2; 3; 4; 5; 9])
 let msort ~mode xss = Utils.reduce_arr ~mode [] msort_list merge xss
-let current_incr_msort xss = Utils.reduce_ci_arr [] msort_list merge xss
+
+let current_incr_msort xss =
+  M.reduce_arr ~incr_type:M.Current_incr [] msort_list merge xss
+
+let js_incr_msort xss =
+  M.reduce_arr ~incr_type:M.Js_incr [] msort_list merge xss
 
 let is_sorted = function
   | [] -> true
@@ -59,6 +66,8 @@ let var_arr = Array.map (fun x -> Var.create [x]) arr
 let t_arr = Array.map Var.watch var_arr
 let ci_var_arr = Array.map (fun x -> Current_incr.var [x]) arr
 let ci_t_arr = Array.map Current_incr.of_var ci_var_arr
+let js_var_arr = Array.map (fun x -> Js_incr.Var.create [x]) arr
+let js_t_arr = Array.map Js_incr.Var.watch js_var_arr
 let runs = !runs
 
 (*Saving keystrokes *)
@@ -72,6 +81,7 @@ let change_inputs ~for' () =
     match for' with
     | `Par_incr -> Var.set var_arr.(index) [rand_num]
     | `Current_incr -> Current_incr.change ci_var_arr.(index) [rand_num]
+    | `Js_incr -> Js_incr.Var.set js_var_arr.(index) [rand_num]
   done
 
 let () =
@@ -116,6 +126,20 @@ let () =
         Gc.full_major ())
       ()
   in
+
+  let js_msort_initial_cons =
+    Bench.run ~name:"js-incr-msort-initial-cons" ~runs
+      ~f:(fun () ->
+        let t = js_incr_msort js_t_arr |> Js_incr.observe in
+        Js_incr.stabilize ();
+        t)
+      ~post:(fun t ->
+        assert (is_sorted (Js_incr.Observer.value_exn t));
+        Js_incr.Observer.disallow_future_use t;
+        Gc.full_major ())
+      ()
+  in
+
   let msort_seq_comp = run_incr (msort ~mode:`Seq t_arr) in
   let incr_seq_msort_change_prop =
     Bench.run ~name:"incr-seq-msort-change-prop"
@@ -198,6 +222,44 @@ let () =
           (Current_incr.observe ci_t_arr.(n - 1) |> List.tl))
       ()
   in
+  Gc.full_major ();
+
+  let js_comp =
+    let t = js_incr_msort js_t_arr |> Js_incr.observe in
+    Js_incr.stabilize ();
+    t
+  in
+
+  let js_msort_change_prop =
+    Bench.run ~name:"js-incr-msort-change-prop"
+      ~pre:(change_inputs ~for':`Js_incr)
+      ~runs
+      ~f:(fun () -> Js_incr.stabilize ())
+      ~post:(fun _ ->
+        assert (js_comp |> Js_incr.Observer.value_exn |> is_sorted))
+      ()
+  in
+
+  let js_msort_append_prop =
+    Bench.run ~name:"js-incr-msort-append-prop"
+      ~pre:(fun () ->
+        (* Append to the last element *)
+        let n = !no_of_entries in
+        Js_incr.Var.set
+          js_var_arr.(n - 1)
+          (Random.int n :: Js_incr.Var.value js_var_arr.(n - 1)))
+      ~runs
+      ~f:(fun () -> Js_incr.stabilize ())
+      ~post:(fun _ ->
+        assert (js_comp |> Js_incr.Observer.value_exn |> is_sorted);
+        (*Undo the change*)
+        let n = !no_of_entries in
+        Js_incr.Var.set
+          js_var_arr.(n - 1)
+          (Js_incr.Var.value js_var_arr.(n - 1) |> List.tl))
+      ()
+  in
+
   Bench.report
     [
       static_seq_stdlib_sort;
@@ -205,10 +267,13 @@ let () =
       incr_seq_msort_initial_cons;
       incr_par_msort_initial_cons;
       ci_msort_initial_cons;
+      js_msort_initial_cons;
       incr_seq_msort_change_prop;
-      incr_par_msort_change_prop;
       incr_seq_msort_append_prop;
+      incr_par_msort_change_prop;
       incr_par_msort_append_prop;
+      js_msort_change_prop;
+      js_msort_append_prop;
       ci_msort_change_prop;
       ci_msort_append_prop;
     ]

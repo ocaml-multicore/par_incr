@@ -2,6 +2,7 @@ module Incr = Par_incr
 open Incr
 module T = Domainslib.Task
 module Js_incr = Incremental.Make ()
+module M = Utils.M (Js_incr)
 
 let () = Random.self_init ()
 let usage_msg = "filter [-n <int>] [-r <int>] [-c <int>]"
@@ -56,14 +57,11 @@ let filter ~mode ~fn (xs : int Incr.t list) =
   f (Nil, Nil) (one_fn fn) combine_fn xs
 
 let current_incr_filter ~fn (xs : int Current_incr.t list) =
-  let f :
-      'a ->
-      (int -> 'a) ->
-      ('a -> 'a -> 'a) ->
-      int Current_incr.t list ->
-      'a Current_incr.t =
-    Utils.reduce_ci_lst ~eq:lst_eq
-  in
+  let f = M.reduce_lst ~incr_type:M.Current_incr ~eq:lst_eq in
+  f (Nil, Nil) (one_fn fn) combine_fn xs
+
+let js_incr_filter ~fn (xs : int Js_incr.t list) =
+  let f = M.reduce_lst ~incr_type:M.Js_incr ~eq:lst_eq in
   f (Nil, Nil) (one_fn fn) combine_fn xs
 
 let () = Random.self_init ()
@@ -72,6 +70,8 @@ let var_lst = List.map Var.create lst
 let t_lst = List.map Var.watch var_lst
 let ci_var_lst = List.map Current_incr.var lst
 let ci_t_lst = List.map Current_incr.of_var ci_var_lst
+let js_var_lst = List.map Js_incr.Var.create lst
+let js_t_lst = List.map Js_incr.Var.watch js_var_lst
 let runs = !runs
 
 (*Saving keystrokes *)
@@ -84,6 +84,7 @@ let change_inputs ~for' () =
     match for' with
     | `Par_incr -> Var.set (List.nth var_lst index) new_val
     | `Current_incr -> Current_incr.change (List.nth ci_var_lst index) new_val
+    | `Js_incr -> Js_incr.Var.set (List.nth js_var_lst index) new_val
   done
 
 let () =
@@ -131,6 +132,23 @@ let () =
       ()
   in
 
+  let js_filter_initial_cons =
+    Bench.run ~runs ~name:"js-incr-filter-init-cons"
+      ~f:(fun () ->
+        let t =
+          js_incr_filter ~fn:(fun x -> x mod 2 = 0) js_t_lst |> Js_incr.observe
+        in
+        Js_incr.stabilize ();
+        t)
+      ~post:(fun c ->
+        let lst, _ = Js_incr.Observer.value_exn c in
+
+        assert (lst_to_list lst = !expected_res);
+        Js_incr.Observer.disallow_future_use c;
+        Gc.full_major ())
+      ()
+  in
+
   let filter_seq_comp =
     run_incr (filter ~mode:`Seq ~fn:(fun x -> x mod 2 = 0) t_lst)
   in
@@ -173,8 +191,29 @@ let () =
   in
   destroy_comp filter_par_comp;
 
-  let ci_filter = current_incr_filter ~fn:(fun x -> x mod 2 = 0) ci_t_lst in
+  let js_filter =
+    js_incr_filter ~fn:(fun x -> x mod 2 = 0) js_t_lst |> Js_incr.observe
+  in
+  Js_incr.stabilize ();
+  let js_filter_change_prop =
+    Bench.run ~name:"js-incr-filter-change-prop"
+      ~pre:(change_inputs ~for':`Js_incr)
+      ~runs
+      ~f:(fun () -> Js_incr.stabilize ())
+      ~post:(fun _ ->
+        let lst, _ = Js_incr.Observer.value_exn js_filter in
+        let res_list = lst_to_list lst in
+        let exp_list =
+          js_var_lst |> List.map Js_incr.Var.value
+          |> List.filter (fun x -> x mod 2 = 0)
+        in
 
+        assert (res_list = exp_list))
+      ()
+  in
+  Gc.full_major ();
+
+  let ci_filter = current_incr_filter ~fn:(fun x -> x mod 2 = 0) ci_t_lst in
   let ci_filter_change_prop =
     Bench.run ~name:"current-incr-filter-change-prop"
       ~pre:(change_inputs ~for':`Current_incr)
@@ -200,8 +239,10 @@ let () =
       incr_seq_filter_initial_cons;
       incr_par_filter_initial_cons;
       ci_filter_initial_cons;
+      js_filter_initial_cons;
       incr_seq_filter_change_prop;
       incr_par_filter_change_prop;
+      js_filter_change_prop;
       ci_filter_change_prop;
     ];
   T.teardown_pool pool
