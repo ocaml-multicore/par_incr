@@ -2,6 +2,7 @@ module Incr = Par_incr
 open Incr
 open Incr.Syntax
 module T = Domainslib.Task
+module Js_incr = Incremental.Make ()
 
 let usage_msg = "sum_array [-n <int>] [-r <int>] [-c <int>]"
 let no_of_entries = ref 100000
@@ -55,12 +56,23 @@ let rec sum_range' ~lo ~hi xs =
     of_cc
     @@ read lhalf (fun l -> Current_incr.read rhalf (fun r -> write (l + r)))
 
+let rec sum_range'' ~lo ~hi xs =
+  let delta = hi - lo in
+  if delta = 1 then xs.(lo)
+  else
+    let mid = lo + (delta asr 1) in
+    let lhalf = sum_range'' ~lo ~hi:mid xs in
+    let rhalf = sum_range'' ~lo:mid ~hi xs in
+    Js_incr.map2 lhalf rhalf ~f:(fun x y -> x + y)
+
 let () = Random.self_init ()
 let arr = Array.init !no_of_entries (fun _ -> !no_of_entries |> Random.int)
 let var_arr = Array.map Var.create arr
 let t_arr = Array.map Var.watch var_arr
 let ci_var_arr = Array.map Current_incr.var arr
 let ci_t_arr = Array.map Current_incr.of_var ci_var_arr
+let js_var_arr = Array.map Js_incr.Var.create arr
+let js_t_arr = Array.map Js_incr.Var.watch js_var_arr
 let sum_par = sum_range_par ~lo:0 ~hi:!no_of_entries t_arr
 let sum_seq = sum_range ~lo:0 ~hi:!no_of_entries t_arr
 
@@ -68,10 +80,11 @@ let change_inputs ~for' () =
   let n = !no_of_input_changes in
   for _ = 1 to n do
     let index = !no_of_entries |> Random.int in
+    let new_val = Random.int !no_of_entries in
     match for' with
-    | `Current_incr ->
-      Current_incr.change ci_var_arr.(index) (Random.int !no_of_entries)
-    | `Par_incr -> Var.set var_arr.(index) (Random.int !no_of_entries)
+    | `Current_incr -> Current_incr.change ci_var_arr.(index) new_val
+    | `Par_incr -> Var.set var_arr.(index) new_val
+    | `Js_incr -> Js_incr.Var.set js_var_arr.(index) new_val
   done
 
 let runs = !runs
@@ -117,6 +130,20 @@ let () =
       ()
   in
 
+  let js_incr_arr_sum_initial_cons =
+    Bench.run ~name:"js-incr-arr-sum-initial-cons" ~runs
+      ~f:(fun () ->
+        let t = sum_range'' ~lo:0 ~hi:!no_of_entries js_t_arr in
+        let obs = Js_incr.observe t in
+        Js_incr.stabilize ();
+        obs)
+      ~post:(fun t ->
+        assert (Js_incr.Observer.value_exn t = !sum_result);
+        Js_incr.Observer.disallow_future_use t;
+        Gc.full_major ())
+      ()
+  in
+
   let seq_comp = run_incr sum_seq in
   let incr_seq_arr_sum_prop =
     Bench.run ~name:"incr-seq-arr-sum-prop"
@@ -142,6 +169,26 @@ let () =
       ()
   in
   destroy_comp par_comp;
+  let js_incr_comp =
+    Js_incr.observe (sum_range'' ~lo:0 ~hi:!no_of_entries js_t_arr)
+  in
+  Js_incr.stabilize ();
+  let js_incr_arr_sum_prop =
+    Bench.run ~name:"js_incr-arr-sum-prop" ~runs
+      ~pre:(fun () ->
+        change_inputs ~for':`Js_incr ();
+        sum_result :=
+          Array.fold_left
+            (fun acc x -> acc + (x |> Js_incr.Var.value))
+            0 js_var_arr)
+      ~f:(fun () -> Js_incr.stabilize ())
+      ~post:(fun _ ->
+        assert (Js_incr.Observer.value_exn js_incr_comp = !sum_result))
+      ()
+  in
+  Js_incr.Observer.disallow_future_use js_incr_comp;
+  Gc.full_major ();
+
   let ci_comp = sum_range' ~lo:0 ~hi:!no_of_entries ci_t_arr in
   let current_incr_arr_sum_prop =
     Bench.run ~name:"current-incr-arr-sum-prop" ~runs
@@ -163,9 +210,11 @@ let () =
       incr_seq_arr_sum_initial_cons;
       incr_par_arr_sum_initial_cons;
       current_incr_arr_sum_initial_cons;
+      js_incr_arr_sum_initial_cons;
       incr_seq_arr_sum_prop;
       incr_par_arr_sum_prop;
       current_incr_arr_sum_prop;
+      js_incr_arr_sum_prop;
     ]
 
 let () = T.teardown_pool pool

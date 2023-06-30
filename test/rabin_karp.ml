@@ -1,6 +1,7 @@
 module Incr = Par_incr
 open Incr
 module T = Domainslib.Task
+module Js_incr = Incremental.Make ()
 
 let pool, par_executor = Utils.get_par_executor ~num_domains:4 ()
 let chunk_size = 64
@@ -62,6 +63,8 @@ let var_chunks = Array.map Var.create chunks
 let t_chunks = Array.map Var.watch var_chunks
 let ci_var_chunks = Array.map Current_incr.var chunks
 let ci_t_chunks = Array.map Current_incr.of_var ci_var_chunks
+let js_var_chunks = Array.map Js_incr.Var.create chunks
+let js_t_chunks = Array.map Js_incr.Var.watch js_var_chunks
 
 let rabin_karp_static_par chunks =
   let rec f l r =
@@ -90,6 +93,16 @@ let rabin_karp_current_incr chunks =
   in
   f 0 (Array.length chunks)
 
+let rabin_karp_js_incr chunks =
+  let rec f l r =
+    let delta = r - l in
+    if delta = 1 then Js_incr.map ~f:Hash.hash_chunk chunks.(l)
+    else
+      let mid = l + (delta asr 1) in
+      Js_incr.map2 ~f:(fun x y -> Hash.merge x y) (f l mid) (f mid r)
+  in
+  f 0 (Array.length chunks)
+
 let rabin_karp_incr ~mode chunks =
   Utils.reduce_arr ~mode
     Hash.{result = 0; acc = 1}
@@ -104,6 +117,7 @@ let change_inputs ~for' () =
     match for' with
     | `Current_incr -> Current_incr.change ci_var_chunks.(index) chunk'
     | `Par_incr -> Var.set var_chunks.(index) chunk'
+    | `Js_incr -> Js_incr.Var.set js_var_chunks.(index) chunk'
   done
 
 let run_incr = Incr.run ~executor:par_executor
@@ -145,6 +159,20 @@ let () =
         Gc.full_major ())
       ()
   in
+
+  let js_initial_cons =
+    Bench.run ~runs ~name:"js-incr-rk-initial-cons"
+      ~f:(fun () ->
+        let t = rabin_karp_js_incr js_t_chunks |> Js_incr.observe in
+        Js_incr.stabilize ();
+        t)
+      ~post:(fun t ->
+        assert (Js_incr.Observer.value_exn t = !hash_result);
+        Js_incr.Observer.disallow_future_use t;
+        Gc.full_major ())
+      ()
+  in
+
   let incr_seq_comp = run_incr (rabin_karp_incr ~mode:`Seq t_chunks) in
   let incr_seq_prop =
     Bench.run ~runs ~name:"incr-seq-rk-prop"
@@ -171,6 +199,22 @@ let () =
   in
   destroy_comp incr_par_comp;
 
+  let js_comp =
+    let t = rabin_karp_js_incr js_t_chunks |> Js_incr.observe in
+    Js_incr.stabilize ();
+    t
+  in
+  let js_prop =
+    Bench.run ~runs ~name:"js-incr-rk-prop"
+      ~pre:(change_inputs ~for':`Js_incr)
+      ~f:(fun () -> Js_incr.stabilize ())
+      ~post:(fun _ ->
+        assert (
+          Js_incr.Observer.value_exn js_comp
+          = rabin_karp_static_par (js_var_chunks |> Array.map Js_incr.Var.value)))
+      ()
+  in
+
   let ci_comp = rabin_karp_current_incr ci_t_chunks in
   let ci_prop =
     Bench.run ~runs ~name:"current-incr-rk-prop"
@@ -189,8 +233,10 @@ let () =
       incr_seq_initial_cons;
       incr_par_initial_cons;
       ci_initial_cons;
+      js_initial_cons;
       incr_seq_prop;
       incr_par_prop;
+      js_prop;
       ci_prop;
     ];
   T.teardown_pool pool

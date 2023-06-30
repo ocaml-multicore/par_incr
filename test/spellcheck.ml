@@ -1,6 +1,7 @@
 module Incr = Par_incr
 open Incr
 module T = Domainslib.Task
+module Js_incr = Incremental.Make ()
 
 let () = Random.self_init ()
 let usage_msg = "spellcheck [-n <int>] [-r <int>] [-c <int>]"
@@ -61,6 +62,18 @@ let min_distance' tgt xs =
   in
   f 0 (Array.length xs)
 
+let min_distance'' tgt xs =
+  let rec f lo hi =
+    let delta = hi - lo in
+    if delta = 1 then Js_incr.map xs.(lo) ~f:(edit_distance tgt)
+    else
+      let mid = lo + (delta asr 1) in
+      let lhalf = f lo mid in
+      let rhalf = f mid hi in
+      Js_incr.map2 lhalf rhalf ~f:(fun x y -> min x y)
+  in
+  f 0 (Array.length xs)
+
 let par_static_min_edit_distance tgt words =
   par_executor.run (fun () ->
       T.parallel_for_reduce ~start:0
@@ -76,6 +89,8 @@ let rand_var_words = Array.map Var.create rand_words
 let rand_t_words = Array.map Var.watch rand_var_words
 let rand_ci_var_words = Array.map Current_incr.var rand_words
 let rand_ci_t_words = Array.map Current_incr.of_var rand_ci_var_words
+let rand_js_var_words = Array.map Js_incr.Var.create rand_words
+let rand_js_t_words = Array.map Js_incr.Var.watch rand_js_var_words
 
 (* Saving keystrokes *)
 let run_incr = Incr.run ~executor:par_executor
@@ -87,6 +102,7 @@ let change_some_words ~for' () =
     match for' with
     | `Current_incr -> Current_incr.change rand_ci_var_words.(ind) new_str
     | `Par_incr -> Var.set rand_var_words.(ind) new_str
+    | `Js_incr -> Js_incr.Var.set rand_js_var_words.(ind) new_str
   done
 
 let () =
@@ -139,6 +155,19 @@ let () =
       ()
   in
 
+  let js_init =
+    Bench.run ~runs ~name:"js-incr-spellcheck-initial-cons"
+      ~f:(fun () ->
+        let t = Js_incr.observe (min_distance'' target_word rand_js_t_words) in
+        Js_incr.stabilize ();
+        t)
+      ~post:(fun t ->
+        assert (Js_incr.Observer.value_exn t = !static_par_res);
+        Js_incr.Observer.disallow_future_use t;
+        Gc.full_major ())
+      ()
+  in
+
   let incr_seq_spellcheck_comp =
     run_incr (min_distance ~mode:`Seq target_word rand_t_words)
   in
@@ -171,6 +200,24 @@ let () =
   in
   destroy_comp incr_par_spellcheck_comp;
 
+  let js_comp =
+    let t = Js_incr.observe (min_distance'' target_word rand_js_t_words) in
+    Js_incr.stabilize ();
+    t
+  in
+  let js_spellcheck_prop =
+    Bench.run ~runs ~name:"js-incr-spellcheck-change-prop"
+      ~pre:(change_some_words ~for':`Js_incr)
+      ~f:(fun () -> Js_incr.stabilize ())
+      ~post:(fun _ ->
+        assert (
+          Js_incr.Observer.value_exn js_comp
+          = par_static_min_edit_distance target_word
+              (Array.map Js_incr.Var.value rand_js_var_words)))
+      ()
+  in
+  Js_incr.Observer.disallow_future_use js_comp;
+
   let ci_comp = min_distance' target_word rand_ci_t_words in
   let ci_spellcheck_prop =
     Bench.run ~runs ~name:"current-incr-spellcheck-change-prop"
@@ -190,8 +237,10 @@ let () =
       incr_seq_init;
       incr_par_init;
       ci_init;
+      js_init;
       incr_seq_spellcheck_prop;
       incr_par_spellcheck_prop;
+      js_spellcheck_prop;
       ci_spellcheck_prop;
     ];
   T.teardown_pool pool

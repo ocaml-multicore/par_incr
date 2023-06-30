@@ -1,7 +1,7 @@
 (library
   (name utils)
   (modules utils)
-  (libraries unix par_incr domainslib current_incr)
+  (libraries unix par_incr domainslib current_incr incremental)
 )
 
 (library
@@ -22,21 +22,21 @@
 (test
   (name sum_array)
   (modules sum_array)
-  (libraries par_incr utils bench current_incr)
+  (libraries par_incr utils bench )
 )
 (test
   (name spellcheck)
   (modules spellcheck)
-  (libraries par_incr utils bench current_incr)
+  (libraries par_incr utils bench )
 )
 
 (test
   (name filter)
   (modules filter)
-  (libraries par_incr utils bench)
+  (libraries par_incr utils bench )
 )
 (test
   (name rabin_karp)
   (modules rabin_karp)
-  (libraries par_incr utils bench current_incr)
+  (libraries par_incr utils bench )
 )

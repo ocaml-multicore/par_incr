@@ -1,6 +1,7 @@
 module Incr = Par_incr
 open Incr
 module T = Domainslib.Task
+module Js_incr = Incremental.Make ()
 
 let () = Random.self_init ()
 let usage_msg = "filter [-n <int>] [-r <int>] [-c <int>]"
@@ -32,27 +33,27 @@ let lst_eq a b =
 
 let set_rest lst rest = match lst with Nil -> () | Cons l -> l.rest <- rest
 
+let one_fn fn x =
+  if fn x then
+    let res = Cons {value = x; rest = Nil} in
+    (res, res)
+  else (Nil, Nil)
+
+let combine_fn (x, xlast) (y, ylast) =
+  match (x, y) with
+  | Nil, _ -> (y, ylast)
+  | Cons _, Nil ->
+    set_rest xlast y;
+    (x, xlast)
+  | _ ->
+    set_rest xlast y;
+    (x, ylast)
+
 let filter ~mode ~fn (xs : int Incr.t list) =
   let f : 'a -> (int -> 'a) -> ('a -> 'a -> 'a) -> int Incr.t list -> 'a t =
     Utils.reduce_lst ~eq:lst_eq ~mode
   in
-  f (Nil, Nil)
-    (fun x ->
-      if fn x then begin
-        let res = Cons {value = x; rest = Nil} in
-        (res, res)
-      end
-      else (Nil, Nil))
-    (fun (x, xlast) (y, ylast) ->
-      match (x, y) with
-      | Nil, _ -> (y, ylast)
-      | Cons _, Nil ->
-        set_rest xlast y;
-        (x, xlast)
-      | _ ->
-        set_rest xlast y;
-        (x, ylast))
-    xs
+  f (Nil, Nil) (one_fn fn) combine_fn xs
 
 let current_incr_filter ~fn (xs : int Current_incr.t list) =
   let f :
@@ -63,23 +64,7 @@ let current_incr_filter ~fn (xs : int Current_incr.t list) =
       'a Current_incr.t =
     Utils.reduce_ci_lst ~eq:lst_eq
   in
-  f (Nil, Nil)
-    (fun x ->
-      if fn x then begin
-        let res = Cons {value = x; rest = Nil} in
-        (res, res)
-      end
-      else (Nil, Nil))
-    (fun (x, xlast) (y, ylast) ->
-      match (x, y) with
-      | Nil, _ -> (y, ylast)
-      | Cons _, Nil ->
-        set_rest xlast y;
-        (x, xlast)
-      | _ ->
-        set_rest xlast y;
-        (x, ylast))
-    xs
+  f (Nil, Nil) (one_fn fn) combine_fn xs
 
 let () = Random.self_init ()
 let lst = List.init !no_of_entries (fun _ -> !no_of_entries |> Random.int)
