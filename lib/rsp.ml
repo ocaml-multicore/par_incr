@@ -2,7 +2,7 @@ module RNode = struct
   open Types
 
   type t = rnode
-  type show_fn_wrapper = {fn : 'a. 'a action -> 'a}
+  type show_fn_wrapper = {fn : 'a. 'a action -> 'a} [@@unboxed]
 
   let[@inline] make ~fn:{fn} =
     {

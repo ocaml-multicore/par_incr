@@ -1,5 +1,7 @@
+let null = Obj.magic "nullptr"
+
 type 'a var = {
-  mutable value : 'a option;
+  mutable value : 'a;
   mutable eq : 'a -> 'a -> bool;
   mutable to_string : 'a -> string;
   readers : Reader_list.t;
@@ -22,22 +24,24 @@ module Var = struct
   type 'a t = 'a var
 
   let create ?(eq = ( == )) ?(to_s = Utils.undefined) x =
-    {value = Some x; eq; to_string = to_s; readers = Reader_list.empty ()}
+    {value = x; eq; to_string = to_s; readers = Reader_list.empty ()}
 
   let[@inline] empty ~(eq : 'a -> 'a -> bool) ~(to_s : 'a -> string) () =
-    {value = None; eq; to_string = to_s; readers = Reader_list.empty ()}
+    {value = null; eq; to_string = to_s; readers = Reader_list.empty ()}
 
   let[@inline] set ({eq; value; readers; _} as t) x =
     begin
-      match value with
-      | None -> t.value <- Some x
-      | Some x' ->
-        if not (eq x x') then (
-          t.value <- Some x;
-          Reader_list.iter readers Rsp.RNode.mark_dirty)
+      if value == null then t.value <- x
+      else if not (eq x value) then (
+        t.value <- x;
+        Reader_list.iter readers Rsp.RNode.mark_dirty)
     end
 
-  let[@inline] value {value; _} = Utils.deref value
+  let[@inline] value t =
+    if t.value == null then
+      failwith "Something is wrong, trying to access uninitialized value"
+    else t.value
+
   let add_reader {readers; _} r = Reader_list.add_reader readers r
   let remove_reader {readers; _} r = Reader_list.remove_reader readers r
   let num_readers {readers; _} = Reader_list.length readers
