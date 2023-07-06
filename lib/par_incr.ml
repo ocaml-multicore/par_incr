@@ -2,7 +2,7 @@ let null = Obj.magic "nullptr"
 
 type 'a var = {
   mutable value : 'a;
-  mutable eq : 'a -> 'a -> bool;
+  mutable cutoff : 'a Types.cutoff;
   mutable to_string : 'a -> string;
   readers : Reader_list.t;
 }
@@ -20,21 +20,47 @@ type 'a computation = {var : 'a var; mutable root : Rsp.t; e : executor}
 
 module RNode = Rsp.RNode
 
+module Cutoff = struct
+  type 'a t = 'a Types.cutoff =
+    | Always
+    | Never
+    | Phys_equal
+    | Eq of ('a -> 'a -> bool)
+    | F of (oldval:'a -> newval:'a -> bool)
+
+  let attach cutoff t ctx e =
+    let tvar = t ctx e in
+    tvar.cutoff <- cutoff;
+    tvar
+end
+
 module Var = struct
   type 'a t = 'a var
 
-  let create ?(eq = ( == )) ?(to_s = Utils.undefined) x =
-    {value = x; eq; to_string = to_s; readers = Reader_list.empty ()}
+  let create ?(cutoff = Cutoff.Phys_equal) ?(to_s = Utils.undefined) x =
+    let v =
+      {value = x; cutoff; to_string = to_s; readers = Reader_list.empty ()}
+    in
+    v
 
-  let[@inline] empty ~(eq : 'a -> 'a -> bool) ~(to_s : 'a -> string) () =
-    {value = null; eq; to_string = to_s; readers = Reader_list.empty ()}
+  let[@inline] empty ~(cutoff : 'a Cutoff.t) ~(to_s : 'a -> string) () =
+    {value = null; cutoff; to_string = to_s; readers = Reader_list.empty ()}
 
-  let[@inline] set ({eq; value; readers; _} as t) x =
+  let[@inline] set ({cutoff; value; readers; _} as t) x =
     begin
       if value == null then t.value <- x
-      else if not (eq x value) then (
-        t.value <- x;
-        Reader_list.iter readers Rsp.RNode.mark_dirty)
+      else
+        let is_same =
+          match cutoff with
+          | Phys_equal -> x == value
+          | Always -> false
+          | Never -> true
+          | Eq f -> f value x
+          | F f -> f ~oldval:value ~newval:x
+        in
+        if not is_same then (
+          t.value <- x;
+          Reader_list.iter readers Rsp.RNode.mark_dirty)
     end
 
   let[@inline] value t =
@@ -42,14 +68,19 @@ module Var = struct
       failwith "Something is wrong, trying to access uninitialized value"
     else t.value
 
+  let[@inline] cutoff {cutoff; _} = cutoff
+
+  let attach_cutoff (t : 'a t) cutoff =
+    if t.cutoff != cutoff then t.cutoff <- cutoff
+
+  let attach_to_string (t : 'a t) f =
+    if t.to_string != f then t.to_string <- f else ()
+
   let add_reader {readers; _} r = Reader_list.add_reader readers r
   let remove_reader {readers; _} r = Reader_list.remove_reader readers r
   let num_readers {readers; _} = Reader_list.length readers
-  let[@inline] eq {eq; _} = eq
   let to_s t = t |> value |> t.to_string
   let get_to_string {to_string; _} = to_string
-  let attach_eq t f = if t.eq != f then t.eq <- f else ()
-  let attach_to_string t f = if t.to_string != f then t.to_string <- f else ()
   let watch x _ _ = x
 
   module Syntax = struct
@@ -60,12 +91,13 @@ end
 
 let return x _ _ = Var.create x
 
-let map ?(eq = ( == )) ~(fn : 'a -> 'b) (t : 'a t) (ctx : ctx) (e : executor) =
+let map ?(cutoff = Cutoff.Phys_equal) ~(fn : 'a -> 'b) (t : 'a t) (ctx : ctx)
+    (e : executor) =
   begin
     let open Types in
     let left = Rsp.make_empty `S in
     let x = t left e in
-    let y = Var.empty ~eq ~to_s:Utils.undefined () in
+    let y = Var.empty ~cutoff ~to_s:Utils.undefined () in
     let read_fn (type a) : a action -> a = function
       | Update -> Var.set y (Var.value x |> fn)
       | Remove self -> Var.remove_reader x self
@@ -88,12 +120,7 @@ let combine (a : 'a t) (b : 'b t) ctx e =
     let lr = Rsp.make_empty `S in
     let x = a ll e in
     let y = b lr e in
-    let xy =
-      Var.empty
-        ~eq:(Utils.combine_eq (Var.eq x) (Var.eq y))
-        ~to_s:(Utils.combine_to_s (Var.get_to_string x) (Var.get_to_string y))
-        ()
-    in
+    let xy = Var.empty ~cutoff:Phys_equal ~to_s:Utils.undefined () in
     let read_fn_xy (type a) : a action -> a = function
       | Update -> Var.set xy (Var.value x, Var.value y)
       | Remove self ->
@@ -127,8 +154,7 @@ let par ~left ~right ctx e =
           (rres, Rsp.prune lr))
     in
     let lr_comb =
-      Var.empty
-        ~eq:(Utils.combine_eq (Var.eq lres) (Var.eq rres))
+      Var.empty ~cutoff:Phys_equal
         ~to_s:
           (Utils.combine_to_s (Var.get_to_string lres) (Var.get_to_string rres))
         ()
@@ -151,11 +177,11 @@ let par ~left ~right ctx e =
     lr_comb
   end
 
-let map2 ?(eq = ( == )) ?(mode = `Seq) ~fn x y ctx e =
+let map2 ?(cutoff = Types.Phys_equal) ?(mode = `Seq) ~fn x y ctx e =
   let xy =
     match mode with `Seq -> combine x y | `Par -> par ~left:x ~right:y
   in
-  map ~eq ~fn:(fun (x, y) -> fn x y) xy ctx e
+  map ~cutoff ~fn:(fun (x, y) -> fn x y) xy ctx e
 
 let value comp = Var.value comp.var
 
@@ -175,20 +201,13 @@ module Debug = struct
     tvar
 end
 
-module Eq = struct
-  let attach ~fn t c e =
-    let tvar = t c e in
-    Var.attach_eq tvar fn;
-    tvar
-end
-
 let bind ~fn x ctx e =
   begin
     let open Types in
     let r = Rsp.set_and_get_exn ctx `Right (Rsp.make_empty `S) in
     let ll = Rsp.make_empty `S in
     let xvar = x ll e in
-    let y = Var.empty ~eq:( == ) ~to_s:Utils.undefined () in
+    let y = Var.empty ~cutoff:Phys_equal ~to_s:Utils.undefined () in
     let read_fn_xvar (type a) : a action -> a = function
       | Update -> begin
         let y' = fn (Var.value xvar) in
@@ -198,7 +217,7 @@ let bind ~fn x ctx e =
         let read_fn_yvar' (type a) : a action -> a = function
           | Update ->
             Var.set y (Var.value yvar');
-            Var.attach_eq y (Var.eq yvar');
+            Var.attach_cutoff y (Var.cutoff yvar');
             Var.attach_to_string y (Var.get_to_string yvar')
           | Remove self -> Var.remove_reader yvar' self
           | Show -> "inner-bind: " ^ Var.to_s y

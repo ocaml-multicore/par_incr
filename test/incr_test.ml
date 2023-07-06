@@ -277,6 +277,7 @@ let bind_test () =
 
   let () = Var.set cond true in
   let () = propagate weird_not_computation in
+
   (*if then branch means just two reader for the cond variable*)
   Alcotest.(check int) reader_check 2 (Var.num_readers cond);
   Alcotest.(check int) reader_check 0 (Var.num_readers true_const);

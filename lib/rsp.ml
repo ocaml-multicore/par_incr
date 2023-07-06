@@ -25,8 +25,8 @@ open Types
 
 type t = comp_tree
 
-let empty = Types.nil_tree
 let nil_tree = Types.nil_tree
+let empty = nil_tree
 
 let[@inline] set_parent_exn ~c ~p =
   if c != nil_tree && not (Utils.is_root c.flags) then c.par <- p

@@ -72,6 +72,17 @@ type executor = Types.executor = {
 
 *)
 
+module Cutoff : sig
+  type 'a t =
+    | Always
+    | Never
+    | Phys_equal
+    | Eq of ('a -> 'a -> bool)
+    | F of (oldval:'a -> newval:'a -> bool)
+
+  val attach : 'a t -> 'a incremental -> 'a incremental
+end
+
 (** Defines the type and various operations for modifiable values. *)
 module Var : sig
   type 'a t
@@ -79,7 +90,7 @@ module Var : sig
       read and changed. This is our handle to values that can be mutated and the
       computations can then be propagated efficiently. *)
 
-  val create : ?eq:('a -> 'a -> bool) -> ?to_s:('a -> string) -> 'a -> 'a t
+  val create : ?cutoff:'a Cutoff.t -> ?to_s:('a -> string) -> 'a -> 'a t
   (** [Var.create x] creates a [Var.t] with value [x]. Optionally you can
       specify [eq] and [to_s] parameters as well. Default for [eq] is [(==)] and
       it's recommended to pass [eq] wherever the default doesn't work. *)
@@ -133,12 +144,12 @@ end
 val return : 'a -> 'a t
 (** [return x] returns an instance of ['a incremental] from [x] of type ['a]. *)
 
-val map : ?eq:('b -> 'b -> bool) -> fn:('a -> 'b) -> 'a t -> 'b t
+val map : ?cutoff:'b Cutoff.t -> fn:('a -> 'b) -> 'a t -> 'b t
 (** [map ~fn a] maps the internal value of [a] to [fn]. Default [eq] is
     [(==)]. *)
 
 val map2 :
-  ?eq:('c -> 'c -> bool) ->
+  ?cutoff:'c Cutoff.t ->
   ?mode:[`Par | `Seq] ->
   fn:('a -> 'b -> 'c) ->
   'a t ->
@@ -201,15 +212,6 @@ module Debug : sig
       when we want to print the computation tree with {!dump_tree}. With a
       specialized to_string attached to an [incremental], we can get better tree
       dumps.  *)
-end
-
-module Eq : sig
-  val attach : fn:('a -> 'a -> bool) -> 'a t -> 'a t
-  (** [Eq.attach ~fn:my_custom_eq_fn incr] attaches [my_custom_eq_fn] as [eq]
-      function to the incremental [incr]. This is useful in cases where you want
-      somewhat different cutoff conditions. Take floating point related
-      computations for example, you may choose to ignore difference in values
-      within some delta. For such cases, you can use this. *)
 end
 
 (** Introduces some convenient operators for {!map}, {!bind}, {!combine} and
