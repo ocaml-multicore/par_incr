@@ -41,7 +41,24 @@ let run ?(pre = Fun.id) ?(post = ignore) ?(runs = 10) ~name ~f () =
     longest_exec_time = runtimes.(runs - 1);
   }
 
-let report res =
+let process s =
+  let first_n_after_nonzero n s =
+    let non_zero_at = ref (-1) in
+    let () =
+      String.iteri
+        (fun i c -> if c <> '0' && !non_zero_at = -1 then non_zero_at := i)
+        s
+    in
+    String.sub s 0 (min (!non_zero_at + n) (String.length s))
+  in
+
+  let l = String.split_on_char '.' s in
+  match l with
+  | [x] -> x
+  | [before; after] -> before ^ "." ^ first_n_after_nonzero 4 after
+  | _ -> failwith "Impossible"
+
+let report ?(in' = `Ms) res =
   let name_padding =
     List.fold_left
       (fun acc x -> Int.max acc (String.length x.bench_name))
@@ -52,11 +69,24 @@ let report res =
     x ^ String.init (len - String.length x) (fun _ -> ' ')
   in
   let f = pad_with_space in
-  let g = Float.to_string in
+  let time_unit_s =
+    match in' with `S -> "s" | `Ms -> "ms" | `Us -> "µs" | `Ns -> "ns"
+  in
+  let g x =
+    let y =
+      match in' with
+      | `S -> x
+      | `Ms -> x *. 1000.
+      | `Us -> x *. 1000. *. 1000.
+      | `Ns -> x *. 1000. *. 1000. *. 1000.
+    in
+    (* let y' = String.sub ( Float.to_string y ) *)
+    process (Float.to_string y) ^ " " ^ time_unit_s
+  in
+
   let () =
-    Printf.printf "%s %s %s %s %s %s\n" (f "Name" name_padding)
-      (f "Median(in s)" 18) (f "Avg(in s)" 18) (f "Runs" 8)
-      (f "Max time(in s)" 18) (f "Min time(in s)" 18)
+    Printf.printf "%s %s %s %s %s %s\n" (f "Name" name_padding) (f "Median" 18)
+      (f "Avg" 18) (f "Runs" 8) (f "Max time" 18) (f "Min time" 18)
   in
   List.iter
     (fun x ->
