@@ -1,4 +1,4 @@
-let null = Obj.magic "nullptr"
+let null = Obj.magic (ref ())
 
 type 'a var = {
   mutable value : 'a;
