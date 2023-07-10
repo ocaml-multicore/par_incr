@@ -18,7 +18,7 @@
 (package
  (name par_incr)
  (synopsis "Parallel Self Adjusting Computation")
- (description "A library for incremental computations, with support for parallel operations")
+ (description "A library for incremental computation, with support for parallelism")
  (depends ocaml dune domainslib (alcotest :with-test) (mdx :with-test))
  (tags
   (ocaml incremental "multicore-ocaml")

@@ -2,7 +2,7 @@
 opam-version: "2.0"
 synopsis: "Parallel Self Adjusting Computation"
 description:
-  "A library for incremental computations, with support for parallel operations"
+  "A library for incremental computation, with support for parallelism"
 maintainer: ["Dipesh Kafle"]
 authors: ["Dipesh Kafle"]
 license: "MIT"
