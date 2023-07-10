@@ -15,5 +15,5 @@ let rec add_reader t node =
   let nodes = Atomic.get t in
   if not (Atomic.compare_and_set t nodes (node :: nodes)) then add_reader t node
 
-let[@inline] for_all t f = List.iter f (Atomic.get t)
-let len t = List.length (Atomic.get t)
+let[@inline] iter t f = List.iter f (Atomic.get t)
+let length t = List.length (Atomic.get t)

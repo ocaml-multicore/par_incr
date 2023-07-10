@@ -34,13 +34,13 @@ module Var = struct
       | Some x' ->
         if not (eq x x') then (
           t.value <- Some x;
-          Reader_list.for_all readers Rsp.RNode.mark_dirty)
+          Reader_list.iter readers Rsp.RNode.mark_dirty)
     end
 
   let[@inline] value {value; _} = Utils.deref value
   let add_reader {readers; _} r = Reader_list.add_reader readers r
   let remove_reader {readers; _} r = Reader_list.remove_reader readers r
-  let num_readers {readers; _} = Reader_list.len readers
+  let num_readers {readers; _} = Reader_list.length readers
   let[@inline] eq {eq; _} = eq
   let to_s t = t |> value |> t.to_string
   let get_to_string {to_string; _} = to_string
