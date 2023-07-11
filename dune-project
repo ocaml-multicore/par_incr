@@ -5,7 +5,7 @@
 (generate_opam_files true)
 
 (source
- (github tarides/par_incr))
+ (github ocaml-multicore/par_incr))
 
 (authors "Dipesh Kafle")
 
@@ -13,15 +13,14 @@
 
 (license MIT)
 
-; (documentation https://url/to/documentation)
+(documentation https://ocaml-multicore.github.io/par_incr/par_incr/index.html)
 
 (package
  (name par_incr)
  (synopsis "Parallel Self Adjusting Computation")
- (description "Parallel version of the incremental library")
+ (description "A library for incremental computation, with support for parallelism")
  (depends ocaml dune domainslib (alcotest :with-test) (mdx :with-test))
  (tags
   (ocaml incremental "multicore-ocaml")
 ))
 (using mdx 0.2)
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
