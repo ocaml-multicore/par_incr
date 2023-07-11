@@ -124,9 +124,7 @@ let () =
   let current_incr_arr_sum_initial_cons =
     Bench.run ~name:"current-incr-arr-sum-initial-cons" ~runs
       ~f:(fun () -> sum_range' ~lo:0 ~hi:!no_of_entries ci_t_arr)
-      ~post:(fun t ->
-        assert (Current_incr.observe t = !sum_result);
-        Gc.full_major ())
+      ~post:(fun t -> assert (Current_incr.observe t = !sum_result))
       ()
   in
 
@@ -139,8 +137,7 @@ let () =
         obs)
       ~post:(fun t ->
         assert (Js_incr.Observer.value_exn t = !sum_result);
-        Js_incr.Observer.disallow_future_use t;
-        Gc.full_major ())
+        Js_incr.Observer.disallow_future_use t)
       ()
   in
 

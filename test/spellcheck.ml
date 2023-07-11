@@ -149,9 +149,7 @@ let () =
   let ci_init =
     Bench.run ~runs ~name:"current-incr-spellcheck-initial-cons"
       ~f:(fun () -> min_distance' target_word rand_ci_t_words)
-      ~post:(fun t ->
-        assert (Current_incr.observe t = !static_par_res);
-        Gc.full_major ())
+      ~post:(fun t -> assert (Current_incr.observe t = !static_par_res))
       ()
   in
 
@@ -163,8 +161,7 @@ let () =
         t)
       ~post:(fun t ->
         assert (Js_incr.Observer.value_exn t = !static_par_res);
-        Js_incr.Observer.disallow_future_use t;
-        Gc.full_major ())
+        Js_incr.Observer.disallow_future_use t)
       ()
   in
 
@@ -217,6 +214,7 @@ let () =
       ()
   in
   Js_incr.Observer.disallow_future_use js_comp;
+  Gc.full_major ();
 
   let ci_comp = min_distance' target_word rand_ci_t_words in
   let ci_spellcheck_prop =

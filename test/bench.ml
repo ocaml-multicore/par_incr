@@ -20,6 +20,7 @@ let run ?(pre = Fun.id) ?(post = ignore) ?(runs = 10) ~name ~f () =
         pre ();
         let f_res, time_elapsed = time_fn ~f in
         let () = post f_res in
+        Gc.full_major ();
         time_elapsed)
   in
   let () = Array.sort Float.compare runtimes in

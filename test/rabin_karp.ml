@@ -154,9 +154,7 @@ let () =
   let ci_initial_cons =
     Bench.run ~runs ~name:"current-incr-rk-initial-cons"
       ~f:(fun () -> rabin_karp_current_incr ci_t_chunks)
-      ~post:(fun c ->
-        assert (Current_incr.observe c = !hash_result);
-        Gc.full_major ())
+      ~post:(fun c -> assert (Current_incr.observe c = !hash_result))
       ()
   in
 
@@ -168,8 +166,7 @@ let () =
         t)
       ~post:(fun t ->
         assert (Js_incr.Observer.value_exn t = !hash_result);
-        Js_incr.Observer.disallow_future_use t;
-        Gc.full_major ())
+        Js_incr.Observer.disallow_future_use t)
       ()
   in
 
@@ -214,6 +211,8 @@ let () =
           = rabin_karp_static_par (js_var_chunks |> Array.map Js_incr.Var.value)))
       ()
   in
+  Js_incr.Observer.disallow_future_use js_comp;
+  Gc.full_major ();
 
   let ci_comp = rabin_karp_current_incr ci_t_chunks in
   let ci_prop =

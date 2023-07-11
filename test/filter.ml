@@ -127,8 +127,7 @@ let () =
       ~post:(fun c ->
         let lst, _ = Current_incr.observe c in
 
-        assert (lst_to_list lst = !expected_res);
-        Gc.full_major ())
+        assert (lst_to_list lst = !expected_res))
       ()
   in
 
@@ -144,8 +143,7 @@ let () =
         let lst, _ = Js_incr.Observer.value_exn c in
 
         assert (lst_to_list lst = !expected_res);
-        Js_incr.Observer.disallow_future_use c;
-        Gc.full_major ())
+        Js_incr.Observer.disallow_future_use c)
       ()
   in
 

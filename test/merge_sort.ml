@@ -121,9 +121,7 @@ let () =
   let ci_msort_initial_cons =
     Bench.run ~name:"current-incr-msort-initial-cons" ~runs
       ~f:(fun () -> current_incr_msort ci_t_arr)
-      ~post:(fun c ->
-        assert (is_sorted (Current_incr.observe c));
-        Gc.full_major ())
+      ~post:(fun c -> assert (is_sorted (Current_incr.observe c)))
       ()
   in
 
@@ -135,8 +133,7 @@ let () =
         t)
       ~post:(fun t ->
         assert (is_sorted (Js_incr.Observer.value_exn t));
-        Js_incr.Observer.disallow_future_use t;
-        Gc.full_major ())
+        Js_incr.Observer.disallow_future_use t)
       ()
   in
 
