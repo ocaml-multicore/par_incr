@@ -77,24 +77,24 @@ let report ?(in' = `Ms) res =
       match in' with
       | `S -> x
       | `Ms -> x *. 1000.
-      | `Us -> x *. 1000. *. 1000.
-      | `Ns -> x *. 1000. *. 1000. *. 1000.
+      | `Us -> x *. (1000. *. 1000.)
+      | `Ns -> x *. (1000. *. 1000. *. 1000.)
     in
     (* let y' = String.sub ( Float.to_string y ) *)
     process (Float.to_string y) ^ " " ^ time_unit_s
   in
 
   let () =
-    Printf.printf "%s %s %s %s %s %s\n" (f "Name" name_padding) (f "Median" 18)
-      (f "Avg" 18) (f "Runs" 8) (f "Max time" 18) (f "Min time" 18)
+    Printf.printf "%s %s %s %s %s %s\n" (f "Name" name_padding) (f "Avg" 18)
+      (f "Median" 18) (f "Runs" 8) (f "Max time" 18) (f "Min time" 18)
   in
-  List.iter
-    (fun x ->
-      Printf.printf "%s %s %s %s %s %s\n"
-        (f x.bench_name name_padding)
-        (f (g x.median_exec_time) 18)
-        (f (g x.avg_exec_time) 18)
-        (f (Int.to_string x.num_of_runs) 8)
-        (f (g x.longest_exec_time) 18)
-        (f (g x.shortest_exec_time) 18))
-    res
+  res
+  |> List.sort (fun x y -> Float.compare x.avg_exec_time y.avg_exec_time)
+  |> List.iter (fun x ->
+         Printf.printf "%s %s %s %s %s %s\n"
+           (f x.bench_name name_padding)
+           (f (g x.avg_exec_time) 18)
+           (f (g x.median_exec_time) 18)
+           (f (Int.to_string x.num_of_runs) 8)
+           (f (g x.longest_exec_time) 18)
+           (f (g x.shortest_exec_time) 18))

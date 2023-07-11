@@ -107,7 +107,7 @@ let change_some_words ~for' () =
 
 let () =
   Printf.printf
-    "Min edit distance with %d random words | %d words changed during \
+    "# Min edit distance with %d random words | %d words changed during \
      propagation\n"
     !no_of_entries !no_of_input_changes;
   let static_seq_res = ref 0 in
@@ -230,14 +230,13 @@ let () =
               (Array.map Current_incr.observe rand_ci_t_words)))
       ()
   in
+
+  print_endline "## Initial computation";
+  Bench.report
+    [static_seq; static_par; incr_seq_init; incr_par_init; ci_init; js_init];
+  print_endline "## Change propagation";
   Bench.report
     [
-      static_seq;
-      static_par;
-      incr_seq_init;
-      incr_par_init;
-      ci_init;
-      js_init;
       incr_seq_spellcheck_prop;
       incr_par_spellcheck_prop;
       js_spellcheck_prop;

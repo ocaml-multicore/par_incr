@@ -125,7 +125,7 @@ let runs = !runs
 
 let () =
   Printf.printf
-    "Rabin Karp Hash | No. of char: %d, Chunk size <= %d, Changes during \
+    "# Rabin Karp Hash | No. of char: %d, Chunk size <= %d, Changes during \
      propagation:%d\n"
     !no_of_char chunk_size !no_of_input_changes;
   let hash_result = ref Hash.{result = 0; acc = 1} in
@@ -227,6 +227,7 @@ let () =
       ()
   in
 
+  print_endline "## Initial computation";
   Bench.report
     [
       static_par;
@@ -234,9 +235,7 @@ let () =
       incr_par_initial_cons;
       ci_initial_cons;
       js_initial_cons;
-      incr_seq_prop;
-      incr_par_prop;
-      js_prop;
-      ci_prop;
     ];
+  print_endline "## Change propagation";
+  Bench.report [incr_seq_prop; incr_par_prop; js_prop; ci_prop];
   T.teardown_pool pool

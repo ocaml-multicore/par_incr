@@ -89,7 +89,7 @@ let change_inputs ~for' () =
 
 let () =
   Printf.printf
-    "Filtering list of size: %d | %d elements changed in propagation\n"
+    "# Filtering list of size: %d | %d elements changed in propagation\n"
     !no_of_entries !no_of_input_changes;
   let expected_res = ref [] in
   let static_filter =
@@ -233,6 +233,7 @@ let () =
       ()
   in
 
+  print_endline "## Initial computation";
   Bench.report
     [
       static_filter;
@@ -240,6 +241,11 @@ let () =
       incr_par_filter_initial_cons;
       ci_filter_initial_cons;
       js_filter_initial_cons;
+    ];
+
+  print_endline "## Change propagation";
+  Bench.report
+    [
       incr_seq_filter_change_prop;
       incr_par_filter_change_prop;
       js_filter_change_prop;

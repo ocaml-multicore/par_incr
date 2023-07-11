@@ -86,7 +86,7 @@ let change_inputs ~for' () =
 
 let () =
   Printf.printf
-    "Sorting array of size: %d | %d elements changed in propagation\n"
+    "# Sorting array of size: %d | %d elements changed in propagation\n"
     !no_of_entries !no_of_input_changes;
   let tmp_arr = ref [||] in
   let static_seq_stdlib_sort =
@@ -260,6 +260,7 @@ let () =
       ()
   in
 
+  print_endline "## Initial computation";
   Bench.report
     [
       static_seq_stdlib_sort;
@@ -268,13 +269,22 @@ let () =
       incr_par_msort_initial_cons;
       ci_msort_initial_cons;
       js_msort_initial_cons;
+    ];
+
+  print_endline "## Change propagation";
+  Bench.report
+    [
       incr_seq_msort_change_prop;
-      incr_seq_msort_append_prop;
       incr_par_msort_change_prop;
-      incr_par_msort_append_prop;
       js_msort_change_prop;
-      js_msort_append_prop;
       ci_msort_change_prop;
+    ];
+  print_endline "## Append propagation";
+  Bench.report
+    [
+      incr_seq_msort_append_prop;
+      incr_par_msort_append_prop;
+      js_msort_append_prop;
       ci_msort_append_prop;
     ]
 

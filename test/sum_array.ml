@@ -94,7 +94,7 @@ let run_incr = Incr.run ~executor:par_executor
 
 let () =
   Printf.printf
-    "Sum of int array of size: %d | %d elements changed in propagation \
+    "# Sum of int array of size: %d | %d elements changed in propagation \
      benchmarks\n"
     !no_of_entries !no_of_input_changes;
   let sum_result = ref 0 in
@@ -204,6 +204,7 @@ let () =
       ()
   in
 
+  print_endline "## Initial computation";
   Bench.report
     [
       static_seq_arr_sum;
@@ -211,6 +212,10 @@ let () =
       incr_par_arr_sum_initial_cons;
       current_incr_arr_sum_initial_cons;
       js_incr_arr_sum_initial_cons;
+    ];
+  print_endline "## Change propagation";
+  Bench.report
+    [
       incr_seq_arr_sum_prop;
       incr_par_arr_sum_prop;
       current_incr_arr_sum_prop;
