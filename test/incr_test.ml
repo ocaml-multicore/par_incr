@@ -33,6 +33,14 @@ let simple_test () =
   let () = destroy_comp y in
   Alcotest.(check int) no_readers_check 0 (Var.num_readers x)
 
+(*
+Make sure destroy works properly. Behaviour is:
+
+- Destroys the entire computation. This means the readers count should be
+  changed accordingly.
+
+- Trying to run propagate on destroyed computation raises exception.
+*)
 let destroy_test () =
   let x = Var.create 10 in
   let y = run ~executor:seq_executor (map ~fn:(fun y -> 2 * y) (Var.watch x)) in
@@ -57,6 +65,11 @@ let destroy_test () =
     "root is changed to dummy node" 0
     (Obj.magic (Obj.field (Obj.repr y) 1))
 
+(*
+We'll test the following properties of map:
+- The output should be updated on changing input(and calling propagate)
+- Shouldn't cause leaks
+*)
 let map_test () =
   let map_fn x = 2 * x in
   let x = Var.create 10 in
@@ -76,11 +89,13 @@ let map_test () =
   let () = destroy_comp y in
   Alcotest.(check int) reader_check 0 (Var.num_readers x)
 
+(* Testing change propagation for combine *)
 let combine_test () =
   let tup_eq (a', b') (a'', b'') = a' = a'' && String.equal b' b'' in
 
   let x = Var.create 10 in
   let y = Var.create "Ten" in
+  let live_words_before_running_comp = live_words () in
   let z = run ~executor:seq_executor (combine (Var.watch x) (Var.watch y)) in
   Alcotest.(check int) reader_check 1 (Var.num_readers x);
   Alcotest.(check int) reader_check 1 (Var.num_readers y);
@@ -100,19 +115,33 @@ let combine_test () =
   Alcotest.(check bool) output_check true (tup_eq (30, "Thirty") (value z));
 
   let () = destroy_comp z in
+  Alcotest.(check bool)
+    no_leak_check true
+    (live_words () <= live_words_before_running_comp);
   Alcotest.(check int) reader_check 0 (Var.num_readers x);
   Alcotest.(check int) reader_check 0 (Var.num_readers y)
 
+(*Making sure things actually run parallely(atleast making surepar_do gets
+  called appropriately). Checking for leaks in this test will give weird results
+  since we have domains running. So, the other test `par_test_for_gc` will make
+  sure we don't have leaks. This test makes sure of the change propagation and
+  when par_do operation gets called. This is sort of testing the implementation
+  of propagate as well in one way. *)
 let par_test () =
   let open Syntax in
   let module T = Domainslib.Task in
   let pool = T.setup_pool ~num_domains:2 () in
   let test () =
-    let par_do_call_count = ref 0 in
+    let par_do_call_count = Atomic.make 0 in
     let run f = T.run pool f in
 
     let par_do l r =
-      incr par_do_call_count;
+      Atomic.incr par_do_call_count;
+      (*We'll use atomic incr here since we are doing parallel operations. Our
+        operation is rather simple(there's just only one invocation of par_do),
+        so it would work for this particular case to use ref incr too. But we'll
+        use Atomic incr because that is what you should use when you have things
+        that can run parallely. *)
       let lres = T.async pool l in
       let rres = r () in
       (T.await pool lres, rres)
@@ -130,13 +159,13 @@ let par_test () =
     Alcotest.(check int) output_check 60 (value dbl_sum);
     Alcotest.(check int) reader_check 1 (Var.num_readers x);
     Alcotest.(check int) reader_check 1 (Var.num_readers y);
-    Alcotest.(check int) par_do_call_check 1 !par_do_call_count;
+    Alcotest.(check int) par_do_call_check 1 (Atomic.get par_do_call_count);
 
     let () = Var.set x 30 in
     let () = propagate dbl_sum in
     Alcotest.(check int) output_check 100 (value dbl_sum);
     (*Wouldn't call par_do since only one side was affected*)
-    Alcotest.(check int) par_do_call_check 1 !par_do_call_count;
+    Alcotest.(check int) par_do_call_check 1 (Atomic.get par_do_call_count);
 
     let expected_par_call_cnt = ref 1 in
 
@@ -149,31 +178,38 @@ let par_test () =
 
         Alcotest.(check int) output_check (2 * (i + j)) (value dbl_sum);
         Alcotest.(check int)
-          par_do_call_check !expected_par_call_cnt !par_do_call_count
+          par_do_call_check !expected_par_call_cnt
+          (Atomic.get par_do_call_count)
       done
     done;
 
     T.teardown_pool pool;
-    (*propagating with torn down pool raises exception, hence not legal behaviour*)
+    (*propagating with torn down pool raises exception, hence not legal
+      behaviour*)
     Alcotest.check_raises "running propagate with torn down pool raises exn"
       (Invalid_argument "pool already torn down") (fun () -> propagate dbl_sum);
     destroy_comp dbl_sum;
     ()
   in
   Fun.protect
-  (*Make sure pool is torn down, else this might interfere somehow with other tests that check gc stats*)
+  (*Make sure pool is torn down, else this might interfere somehow with other
+    tests that check gc stats*)
     ~finally:(fun () ->
       (*Handle exn in case teardown ran twice*)
       try T.teardown_pool pool with _ -> ())
     test
 
-(*I have to test leaks in sequential version of par because no. of live words with domains becomes weird*)
+(* I have to check for leaks in sequential version of par because no. of live
+   words with domains becomes weird. This test makes sure we don't have leaks in
+   `par` operation.*)
 let par_test_for_gc () =
   let open Syntax in
   let par_do_call_count = ref 0 in
   let run = seq_executor.run in
   let par_do l r =
     incr par_do_call_count;
+    (*We don't need atomic incr here because we're
+      anyway doing things sequentially*)
     seq_executor.par_do l r
   in
   let executor = {run; par_do} in
@@ -216,6 +252,12 @@ let par_test_for_gc () =
   destroy_comp dbl_sum;
   ()
 
+(*We'll check the change propagation, and make sure there's no leak. The test is
+  designed in a way such that on changing the condition, the computation tree
+  that gets built is different. One has a few extra node than the other one. We
+  ensure that on changing state from false to true and then back to false will
+  have no leaks. We've tested the dynamic nature of bind too by checking the
+  no. of readers being changed for different Var.t that are used. *)
 let bind_test () =
   let cond = Var.create false in
   let true_const = Var.create true in
@@ -251,6 +293,9 @@ let bind_test () =
   Alcotest.(check bool) "live words remain same" true (live_words () <= gc_stat1);
   destroy_comp weird_not_computation
 
+(*This is a test one some larger computation. All the test above have been very
+  simple. In this one,we'll test propagation, cutoffs and the structure of the
+  computation as well in a way.*)
 let internals_test () =
   let ops = ref 0 in
   let reset_ops () = ops := 0 in
@@ -264,6 +309,8 @@ let internals_test () =
       map2
         ~fn:(fun x y ->
           incr ops;
+          (*Fine to use ref incr since we're not doing anything
+            parallely*)
           Int.add x y)
         (sum_range ~lo ~hi:mid xs) (sum_range ~lo:mid ~hi xs)
   in
@@ -340,6 +387,9 @@ let internals_test () =
 
   destroy_comp sum_c
 
+(* Again a large example that uses bind(but not really in a very
+      natural way). We'll again be testing cutoff,output, no. of calls
+   to different functions,etc. *)
 let bind_internals_test () =
   let sum' xs = List.fold_left ( + ) 0 xs in
   let product xs = List.fold_left ( * ) 1 xs in
@@ -366,10 +416,12 @@ let bind_internals_test () =
   let mul_cnt = ref 0 in
   let add x y =
     incr add_cnt;
+    (*Nothing is parallel so ref incr is fine*)
     x + y
   in
   let mul x y =
     incr mul_cnt;
+    (*Nothing is parallel so ref incr is fine*)
     x * y
   in
   let reset x = x := 0 in
