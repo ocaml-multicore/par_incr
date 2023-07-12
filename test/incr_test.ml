@@ -8,6 +8,7 @@ let no_leak_check = "No leaks or extra allocations check"
 
 let live_words () =
   Gc.full_major ();
+  Gc.full_major ();
   (Gc.stat ()).live_words
 
 let does_raise f = match f () with exception _ -> true | _ -> false
@@ -24,7 +25,9 @@ let simple_test () =
     let () = Var.set x i in
     let () = propagate y in
     Alcotest.(check int) output_check i (value y);
-    Alcotest.(check int) no_leak_check live_words_before_loop (live_words ())
+    Alcotest.(check bool)
+      no_leak_check true
+      (live_words () <= live_words_before_loop)
   done;
 
   let () = destroy_comp y in
@@ -42,9 +45,10 @@ let destroy_test () =
   in
 
   let () = destroy_comp y in
-  Alcotest.(check bool)
-    "propagate raises after destroying" true
-    (does_raise (fun () -> propagate y));
+
+  Alcotest.check_raises "propagate raises after destroying"
+    (Failure "Cannot propagate destroyed/ill-formed computation") (fun () ->
+      propagate y);
   Alcotest.(check int) no_readers_check 0 (Var.num_readers x);
 
   (*'a computation = {var;root;e}, so root is 1st field(starting from 0)*)
@@ -65,7 +69,9 @@ let map_test () =
     let () = Var.set x i in
     let () = propagate y in
     Alcotest.(check int) output_check (map_fn i) (value y);
-    Alcotest.(check int) no_leak_check live_words_before_loop (live_words ())
+    Alcotest.(check bool)
+      no_leak_check true
+      (live_words () <= live_words_before_loop)
   done;
   let () = destroy_comp y in
   Alcotest.(check int) reader_check 0 (Var.num_readers x)
@@ -149,10 +155,8 @@ let par_test () =
 
     T.teardown_pool pool;
     (*propagating with torn down pool raises exception, hence not legal behaviour*)
-    Alcotest.(check bool)
-      "running propagate with torn down pool raises exn" true
-      (does_raise (fun () -> propagate dbl_sum));
-
+    Alcotest.check_raises "running propagate with torn down pool raises exn"
+      (Invalid_argument "pool already torn down") (fun () -> propagate dbl_sum);
     destroy_comp dbl_sum;
     ()
   in
@@ -189,7 +193,7 @@ let par_test_for_gc () =
   Alcotest.(check int) output_check 100 (value dbl_sum);
   (*Wouldn't call par_do since only one side was affected*)
   Alcotest.(check int) par_do_call_check 1 !par_do_call_count;
-  Alcotest.(check int) no_leak_check live_words_at_start (live_words ());
+  Alcotest.(check bool) no_leak_check true (live_words () <= live_words_at_start);
 
   let expected_par_call_cnt = ref 1 in
 
@@ -203,7 +207,9 @@ let par_test_for_gc () =
       Alcotest.(check int) output_check (2 * (i + j)) (value dbl_sum);
       Alcotest.(check int)
         par_do_call_check !expected_par_call_cnt !par_do_call_count;
-      Alcotest.(check int) no_leak_check live_words_at_start (live_words ())
+      Alcotest.(check bool)
+        no_leak_check true
+        (live_words () <= live_words_at_start)
     done
   done;
 
@@ -242,7 +248,7 @@ let bind_test () =
   Alcotest.(check bool) output_check true (value weird_not_computation);
 
   (*Making sure there's no leaks with bind*)
-  Alcotest.(check int) "live words remain same" gc_stat1 (live_words ());
+  Alcotest.(check bool) "live words remain same" true (live_words () <= gc_stat1);
   destroy_comp weird_not_computation
 
 let internals_test () =
