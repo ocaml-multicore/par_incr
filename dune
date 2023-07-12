@@ -1,1 +1,5 @@
-(mdx)
+(mdx
+ (package par_incr)
+ (deps
+  (package par_incr))
+ (files README.md))
