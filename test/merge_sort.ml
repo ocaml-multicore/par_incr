@@ -121,7 +121,13 @@ let () =
   let ci_msort_initial_cons =
     Bench.run ~name:"current-incr-msort-initial-cons" ~runs
       ~f:(fun () -> current_incr_msort ci_t_arr)
-      ~post:(fun c -> assert (is_sorted (Current_incr.observe c)))
+      ~post:(fun c ->
+        assert (is_sorted (Current_incr.observe c));
+        for i = 0 to Array.length arr - 1 do
+          ci_var_arr.(i) <-
+            ci_t_arr.(i) |> Current_incr.observe |> Current_incr.var;
+          ci_t_arr.(i) <- Current_incr.of_var ci_var_arr.(i)
+        done)
       ()
   in
 

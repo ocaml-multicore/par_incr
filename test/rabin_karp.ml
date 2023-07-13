@@ -26,6 +26,8 @@ module Hash = struct
 
   let merge l r =
     {result = (l.result *% r.acc) +% r.result; acc = l.acc *% r.acc}
+
+  let eq l r = l.result = r.result && l.acc = r.acc
 end
 
 let usage_msg = "rabin_karp [-n <int>] [-r <int>] [-c <int>]"
@@ -83,13 +85,15 @@ let rabin_karp_current_incr chunks =
   let open Current_incr in
   let rec f l r =
     let delta = r - l in
-    if delta = 1 then map Hash.hash_chunk chunks.(l)
+    if delta = 1 then map ~eq:Hash.eq Hash.hash_chunk chunks.(l)
     else
       let mid = l + (delta asr 1) in
-      let lhash, rhash = (f l mid, f mid r) in
+      let lhash = f l mid in
+      let rhash = f mid r in
       of_cc
       @@ read lhash (fun lhash ->
-             read rhash (fun rhash -> write @@ Hash.merge lhash rhash))
+             read rhash (fun rhash ->
+                 write ~eq:Hash.eq @@ Hash.merge lhash rhash))
   in
   f 0 (Array.length chunks)
 
@@ -154,7 +158,12 @@ let () =
   let ci_initial_cons =
     Bench.run ~runs ~name:"current-incr-rk-initial-cons"
       ~f:(fun () -> rabin_karp_current_incr ci_t_chunks)
-      ~post:(fun c -> assert (Current_incr.observe c = !hash_result))
+      ~post:(fun c ->
+        assert (Current_incr.observe c = !hash_result);
+        for i = 0 to Array.length chunks - 1 do
+          ci_var_chunks.(i) <- Current_incr.var chunks.(i);
+          ci_t_chunks.(i) <- Current_incr.of_var ci_var_chunks.(i)
+        done)
       ()
   in
 

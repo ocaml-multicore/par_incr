@@ -30,7 +30,7 @@ let run ?(pre = Fun.id) ?(post = ignore) ?(runs = 10) ~name ~f () =
       if runs mod 2 = 0 then begin
         (runtimes.((runs + 1) / 2) +. runtimes.((runs - 1) / 2)) /. 2.0
       end
-      else runtimes.((runs + 1) / 2)
+      else runtimes.(runs / 2)
     end
   in
   {

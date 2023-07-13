@@ -68,8 +68,8 @@ let () = Random.self_init ()
 let lst = List.init !no_of_entries (fun _ -> !no_of_entries |> Random.int)
 let var_lst = List.map Var.create lst
 let t_lst = List.map Var.watch var_lst
-let ci_var_lst = List.map Current_incr.var lst
-let ci_t_lst = List.map Current_incr.of_var ci_var_lst
+let ci_var_lst = ref @@ List.map Current_incr.var lst
+let ci_t_lst = ref @@ List.map Current_incr.of_var !ci_var_lst
 let js_var_lst = List.map Js_incr.Var.create lst
 let js_t_lst = List.map Js_incr.Var.watch js_var_lst
 let runs = !runs
@@ -83,7 +83,7 @@ let change_inputs ~for' () =
     let new_val = Random.int !no_of_entries in
     match for' with
     | `Par_incr -> Var.set (List.nth var_lst index) new_val
-    | `Current_incr -> Current_incr.change (List.nth ci_var_lst index) new_val
+    | `Current_incr -> Current_incr.change (List.nth !ci_var_lst index) new_val
     | `Js_incr -> Js_incr.Var.set (List.nth js_var_lst index) new_val
   done
 
@@ -123,11 +123,17 @@ let () =
 
   let ci_filter_initial_cons =
     Bench.run ~runs ~name:"current-incr-filter-init-cons"
-      ~f:(fun () -> current_incr_filter ~fn:(fun x -> x mod 2 = 0) ci_t_lst)
+      ~f:(fun () -> current_incr_filter ~fn:(fun x -> x mod 2 = 0) !ci_t_lst)
       ~post:(fun c ->
         let lst, _ = Current_incr.observe c in
 
-        assert (lst_to_list lst = !expected_res))
+        assert (lst_to_list lst = !expected_res);
+
+        ci_var_lst :=
+          List.map
+            (fun x -> x |> Current_incr.observe |> Current_incr.var)
+            !ci_t_lst;
+        ci_t_lst := List.map Current_incr.of_var !ci_var_lst)
       ()
   in
 
@@ -211,7 +217,7 @@ let () =
   in
   Gc.full_major ();
 
-  let ci_filter = current_incr_filter ~fn:(fun x -> x mod 2 = 0) ci_t_lst in
+  let ci_filter = current_incr_filter ~fn:(fun x -> x mod 2 = 0) !ci_t_lst in
   let ci_filter_change_prop =
     Bench.run ~name:"current-incr-filter-change-prop"
       ~pre:(change_inputs ~for':`Current_incr)
@@ -222,7 +228,7 @@ let () =
 
         let res_list = lst_to_list lst in
         let exp_list =
-          ci_t_lst
+          !ci_t_lst
           |> List.map Current_incr.observe
           |> List.filter (fun x -> x mod 2 = 0)
         in

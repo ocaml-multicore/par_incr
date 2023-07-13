@@ -50,10 +50,9 @@ end = struct
       match incr_type with
       | Current_incr ->
         let open Current_incr in
-        of_cc
-        @@ read (reduce ~incr_type ?eq one plus xs lo mid) (fun x ->
-               read (reduce ~incr_type ?eq one plus xs mid hi) (fun y ->
-                   write (plus x y)))
+        let x = reduce ~incr_type ?eq one plus xs lo mid in
+        let y = reduce ~incr_type ?eq one plus xs mid hi in
+        of_cc @@ read x (fun x -> read y (fun y -> write (plus x y)))
       | Js_incr ->
         M'.map2
           (reduce ~incr_type ?eq one plus xs lo mid)
@@ -126,10 +125,11 @@ end = struct
       | y :: ys -> (
         match incr_type with
         | Current_incr ->
+          let x = Current_incr.map ?eq one x in
           step_accum' ~incr_type ?eq plus (num asr 1) ys
             (Current_incr.of_cc
             @@ Current_incr.read y (fun y ->
-                   Current_incr.read (Current_incr.map ?eq one x) (fun x ->
+                   Current_incr.read x (fun x ->
                        Current_incr.write ?eq (plus y x))))
         | Js_incr ->
           step_accum' ~incr_type ?eq plus (num asr 1) ys
