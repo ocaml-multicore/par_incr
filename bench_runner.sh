@@ -19,6 +19,6 @@ i=$lo
 
 while [ $i -le $hi ]; do
     changes=$((i*percent_changes/100))
-    (set -x ; dune exec -- test/$bench_name -r $RUNS -n $i -c $changes)
+    (set -x ; dune exec --release -- test/$bench_name -r $RUNS -n $i -c $changes)
     i=$(eval "echo $(($step_fn))")
 done

@@ -99,7 +99,7 @@ let () =
       ()
   in
   let incr_seq_filter_initial_cons =
-    Bench.run ~name:"incr-seq-filter-initial-cons"
+    Bench.run ~name:"incr-seq-filter-initial-cons" ~runs
       ~f:(fun () ->
         run_incr (filter ~mode:`Seq ~fn:(fun x -> x mod 2 = 0) t_lst))
       ~post:(fun c ->
@@ -110,7 +110,7 @@ let () =
       ()
   in
   let incr_par_filter_initial_cons =
-    Bench.run ~name:"incr-par-filter-initial-cons"
+    Bench.run ~name:"incr-par-filter-initial-cons" ~runs
       ~f:(fun () ->
         run_incr (filter ~mode:`Par ~fn:(fun x -> x mod 2 = 0) t_lst))
       ~post:(fun c ->
