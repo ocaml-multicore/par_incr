@@ -31,17 +31,17 @@ module Hash = struct
 end
 
 let usage_msg = "rabin_karp [-n <int>] [-r <int>] [-c <int>]"
-let no_of_char = ref 1000
+let no_of_chunks = ref 1000
 let runs = ref 10
-let no_of_input_changes = ref 50
+let no_of_input_changes = ref 5
 
 let speclist =
   [
-    ("-n", Arg.Set_int no_of_char, "No. of char (Default: 1000)");
+    ("-n", Arg.Set_int no_of_chunks, "No. of char (Default: 1000)");
     ("-r", Arg.Set_int runs, "No. of runs for benchmarking (Default: 10)");
     ( "-c",
       Arg.Set_int no_of_input_changes,
-      "No. of changes to make to input before propagating (Default: 50)" );
+      "No. of changes to make to input before propagating (Default: 5)" );
   ]
 
 let () = Arg.parse speclist ignore usage_msg
@@ -52,15 +52,7 @@ let random_chunk size () =
       let del = Random.int 26 in
       'a' |> Char.code |> ( + ) del |> Char.chr)
 
-let no_of_chunks = (!no_of_char + chunk_size) / chunk_size
-
-let chunks =
-  Array.init no_of_chunks (fun i ->
-      random_chunk
-        (if i = no_of_chunks - 1 then !no_of_char - (i * chunk_size)
-         else chunk_size)
-        ())
-
+let chunks = Array.init !no_of_chunks (fun _ -> random_chunk chunk_size ())
 let var_chunks = Array.map Var.create chunks
 let t_chunks = Array.map Var.watch var_chunks
 let ci_var_chunks = Array.map Current_incr.var chunks
@@ -115,7 +107,7 @@ let rabin_karp_incr ~mode chunks =
 
 let change_inputs ~for' () =
   for _ = 1 to !no_of_input_changes do
-    let index = Random.int no_of_chunks in
+    let index = Random.int !no_of_chunks in
     let chunk = chunks.(index) in
     let chunk' = random_chunk (Bytes.length chunk) () in
     match for' with
@@ -129,9 +121,9 @@ let runs = !runs
 
 let () =
   Printf.printf
-    "# Rabin Karp Hash | No. of char: %d, Chunk size <= %d, Changes during \
+    "# Rabin Karp Hash | No. of chunks: %d, Chunk size = %d, Changes during \
      propagation:%d\n"
-    !no_of_char chunk_size !no_of_input_changes;
+    !no_of_chunks chunk_size !no_of_input_changes;
   let hash_result = ref Hash.{result = 0; acc = 1} in
   let static_par =
     Bench.run ~runs ~name:"static-par-rk"

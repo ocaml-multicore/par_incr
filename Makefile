@@ -1,3 +1,6 @@
+# Don't run all the targets at once because the variable values gets all messed
+# up Run everything one by one
+
 RUNS?=10
 
 define normal_defaults
@@ -14,6 +17,7 @@ filter:
 	$(eval HI?=100000)
 	$(normal_defaults)
 	$(bench_command)
+
 merge_sort:
 	$(eval LO?=1000)
 	$(eval HI?=100000)
@@ -22,7 +26,7 @@ merge_sort:
 
 rabin_karp:
 	$(eval LO?=10000)
-	$(eval HI?=10000000)
+	$(eval HI?=100000)
 	$(normal_defaults)
 	$(bench_command)
 

@@ -196,37 +196,6 @@ let () =
   in
   destroy_comp msort_par_comp;
 
-  let msort_ci_comp = current_incr_msort ci_t_arr in
-  let ci_msort_change_prop =
-    Bench.run ~name:"current-incr-msort-change-prop"
-      ~pre:(change_inputs ~for':`Current_incr)
-      ~runs
-      ~f:(fun () -> Current_incr.propagate ())
-      ~post:(fun _ ->
-        assert (msort_ci_comp |> Current_incr.observe |> is_sorted))
-      ()
-  in
-  let ci_msort_append_prop =
-    Bench.run ~name:"current-incr-msort-append-prop"
-      ~pre:(fun () ->
-        (* Append to the last element *)
-        let n = !no_of_entries in
-        Current_incr.change
-          ci_var_arr.(n - 1)
-          (Random.int n :: Current_incr.observe ci_t_arr.(n - 1)))
-      ~runs
-      ~f:(fun () -> Current_incr.propagate ())
-      ~post:(fun _ ->
-        assert (msort_ci_comp |> Current_incr.observe |> is_sorted);
-        (*Undo the change*)
-        let n = !no_of_entries in
-        Current_incr.change
-          ci_var_arr.(n - 1)
-          (Current_incr.observe ci_t_arr.(n - 1) |> List.tl))
-      ()
-  in
-  Gc.full_major ();
-
   let js_comp =
     let t = js_incr_msort js_t_arr |> Js_incr.observe in
     Js_incr.stabilize ();
@@ -262,6 +231,39 @@ let () =
           (Js_incr.Var.value js_var_arr.(n - 1) |> List.tl))
       ()
   in
+  Js_incr.Observer.disallow_future_use js_comp;
+  Gc.full_major ();
+
+  let msort_ci_comp = current_incr_msort ci_t_arr in
+  let ci_msort_change_prop =
+    Bench.run ~name:"current-incr-msort-change-prop"
+      ~pre:(change_inputs ~for':`Current_incr)
+      ~runs
+      ~f:(fun () -> Current_incr.propagate ())
+      ~post:(fun _ ->
+        assert (msort_ci_comp |> Current_incr.observe |> is_sorted))
+      ()
+  in
+  let ci_msort_append_prop =
+    Bench.run ~name:"current-incr-msort-append-prop"
+      ~pre:(fun () ->
+        (* Append to the last element *)
+        let n = !no_of_entries in
+        Current_incr.change
+          ci_var_arr.(n - 1)
+          (Random.int n :: Current_incr.observe ci_t_arr.(n - 1)))
+      ~runs
+      ~f:(fun () -> Current_incr.propagate ())
+      ~post:(fun _ ->
+        assert (msort_ci_comp |> Current_incr.observe |> is_sorted);
+        (*Undo the change*)
+        let n = !no_of_entries in
+        Current_incr.change
+          ci_var_arr.(n - 1)
+          (Current_incr.observe ci_t_arr.(n - 1) |> List.tl))
+      ()
+  in
+  Gc.full_major ();
 
   print_endline "## Initial computation";
   Bench.report
