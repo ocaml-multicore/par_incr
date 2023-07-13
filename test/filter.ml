@@ -9,6 +9,7 @@ let usage_msg = "filter [-n <int>] [-r <int>] [-c <int>]"
 let no_of_entries = ref 100
 let runs = ref 10
 let no_of_input_changes = ref 5
+let num_domains = ref 4
 
 let speclist =
   [
@@ -17,10 +18,12 @@ let speclist =
     ( "-c",
       Arg.Set_int no_of_input_changes,
       "No. of changes to make to input before propagating (Default: 5)" );
+    ("-d", Arg.Set_int num_domains, "No. of domains to use(Default: 4)");
   ]
 
 let () = Arg.parse speclist ignore usage_msg
-let pool, par_executor = Utils.get_par_executor ~num_domains:4 ()
+let num_domains = !num_domains
+let pool, par_executor = Utils.get_par_executor ~num_domains ()
 
 type 'a lst = Nil | Cons of {value : 'a; mutable rest : 'a lst}
 
@@ -89,8 +92,9 @@ let change_inputs ~for' () =
 
 let () =
   Printf.printf
-    "# Filtering list of size: %d | %d elements changed in propagation\n"
-    !no_of_entries !no_of_input_changes;
+    "# Filtering list of size: %d | %d elements changed in propagation | \
+     Domains spawned: %d\n"
+    !no_of_entries !no_of_input_changes num_domains;
   let expected_res = ref [] in
   let static_filter =
     Bench.run ~name:"static-filter" ~runs

@@ -2,6 +2,7 @@
 # up Run everything one by one
 
 RUNS?=10
+NUM_DOMAINS?=4
 
 define normal_defaults
 	$(eval STEP_FN?="i*10")
@@ -9,7 +10,7 @@ define normal_defaults
 endef
 
 define bench_command
-	RUNS=$(RUNS) bash bench_runner.sh $@.exe $(LO) $(HI) $(STEP_FN) $(CHANGES)
+	NUM_DOMAINS=$(NUM_DOMAINS) RUNS=$(RUNS) bash bench_runner.sh $@.exe $(LO) $(HI) $(STEP_FN) $(CHANGES)
 endef
 
 filter:

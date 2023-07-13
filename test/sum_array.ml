@@ -8,6 +8,7 @@ let usage_msg = "sum_array [-n <int>] [-r <int>] [-c <int>]"
 let no_of_entries = ref 100
 let runs = ref 10
 let no_of_input_changes = ref 5
+let num_domains = ref 4
 
 let speclist =
   [
@@ -18,10 +19,12 @@ let speclist =
     ( "-c",
       Arg.Set_int no_of_input_changes,
       "No. of changes to make to input before propagating(Default:5)" );
+    ("-d", Arg.Set_int num_domains, "No. of domains to use(Default: 4)");
   ]
 
 let () = Arg.parse speclist ignore usage_msg
-let pool, par_executor = Utils.get_par_executor ~num_domains:4 ()
+let num_domains = !num_domains
+let pool, par_executor = Utils.get_par_executor ~num_domains ()
 
 let rec sum_range ~lo ~hi xs =
   delay @@ fun () ->
@@ -95,8 +98,8 @@ let run_incr = Incr.run ~executor:par_executor
 let () =
   Printf.printf
     "# Sum of int array of size: %d | %d elements changed in propagation \
-     benchmarks\n"
-    !no_of_entries !no_of_input_changes;
+     benchmarks | Domains spawned: %d \n"
+    !no_of_entries !no_of_input_changes num_domains;
   let sum_result = ref 0 in
   let static_seq_arr_sum =
     Bench.run ~name:"static-seq-arr-sum" ~runs

@@ -3,7 +3,6 @@ open Incr
 module T = Domainslib.Task
 module Js_incr = Incremental.Make ()
 
-let pool, par_executor = Utils.get_par_executor ~num_domains:4 ()
 let chunk_size = 64
 let prime_mod = 1000000007
 let b = 128
@@ -34,6 +33,7 @@ let usage_msg = "rabin_karp [-n <int>] [-r <int>] [-c <int>]"
 let no_of_chunks = ref 1000
 let runs = ref 10
 let no_of_input_changes = ref 5
+let num_domains = ref 4
 
 let speclist =
   [
@@ -42,9 +42,12 @@ let speclist =
     ( "-c",
       Arg.Set_int no_of_input_changes,
       "No. of changes to make to input before propagating (Default: 5)" );
+    ("-d", Arg.Set_int num_domains, "No. of domains to use(Default: 4)");
   ]
 
 let () = Arg.parse speclist ignore usage_msg
+let num_domains = !num_domains
+let pool, par_executor = Utils.get_par_executor ~num_domains ()
 let () = Random.self_init ()
 
 let random_chunk size () =
@@ -122,8 +125,8 @@ let runs = !runs
 let () =
   Printf.printf
     "# Rabin Karp Hash | No. of chunks: %d, Chunk size = %d, Changes during \
-     propagation:%d\n"
-    !no_of_chunks chunk_size !no_of_input_changes;
+     propagation:%d | Domains spawned: %d\n"
+    !no_of_chunks chunk_size !no_of_input_changes num_domains;
   let hash_result = ref Hash.{result = 0; acc = 1} in
   let static_par =
     Bench.run ~runs ~name:"static-par-rk"

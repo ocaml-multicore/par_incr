@@ -8,6 +8,7 @@ let usage_msg = "spellcheck [-n <int>] [-r <int>] [-c <int>]"
 let no_of_entries = ref 10
 let runs = ref 10
 let no_of_input_changes = ref 2
+let num_domains = ref 4
 
 let speclist =
   [
@@ -16,10 +17,12 @@ let speclist =
     ( "-c",
       Arg.Set_int no_of_input_changes,
       "No. of changes to make to input before propagating(Default:2)" );
+    ("-d", Arg.Set_int num_domains, "No. of domains to use(Default: 4)");
   ]
 
 let () = Arg.parse speclist ignore usage_msg
-let pool, par_executor = Utils.get_par_executor ~num_domains:4 ()
+let num_domains = !num_domains
+let pool, par_executor = Utils.get_par_executor ~num_domains ()
 
 let edit_distance (a : bytes) (b : bytes) =
   let n = Bytes.length a in
@@ -108,8 +111,8 @@ let change_some_words ~for' () =
 let () =
   Printf.printf
     "# Min edit distance with %d random words | %d words changed during \
-     propagation\n"
-    !no_of_entries !no_of_input_changes;
+     propagation | Domains spawned: %d\n"
+    !no_of_entries !no_of_input_changes num_domains;
   let static_seq_res = ref 0 in
   let static_par_res = ref 0 in
   let static_seq =
