@@ -5,17 +5,17 @@ module Js_incr = Incremental.Make ()
 
 let () = Random.self_init ()
 let usage_msg = "spellcheck [-n <int>] [-r <int>] [-c <int>]"
-let no_of_entries = ref 100
+let no_of_entries = ref 10
 let runs = ref 10
-let no_of_input_changes = ref 5
+let no_of_input_changes = ref 2
 
 let speclist =
   [
-    ("-n", Arg.Set_int no_of_entries, "No. of words(Default:100)");
+    ("-n", Arg.Set_int no_of_entries, "No. of words(Default:10)");
     ("-r", Arg.Set_int runs, "No. of runs for benchmarking(Default:10)");
     ( "-c",
       Arg.Set_int no_of_input_changes,
-      "No. of changes to make to input before propagating(Default:5)" );
+      "No. of changes to make to input before propagating(Default:2)" );
   ]
 
 let () = Arg.parse speclist ignore usage_msg

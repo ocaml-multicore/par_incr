@@ -5,19 +5,19 @@ module T = Domainslib.Task
 module Js_incr = Incremental.Make ()
 
 let usage_msg = "sum_array [-n <int>] [-r <int>] [-c <int>]"
-let no_of_entries = ref 100000
+let no_of_entries = ref 100
 let runs = ref 10
-let no_of_input_changes = ref 500
+let no_of_input_changes = ref 5
 
 let speclist =
   [
     ( "-n",
       Arg.Set_int no_of_entries,
-      "No. of elements in the array to be summed(Default:100000)" );
+      "No. of elements in the array to be summed(Default:100)" );
     ("-r", Arg.Set_int runs, "No. of runs for benchmarking(Default:10)");
     ( "-c",
       Arg.Set_int no_of_input_changes,
-      "No. of changes to make to input before propagating(Default:500)" );
+      "No. of changes to make to input before propagating(Default:5)" );
   ]
 
 let () = Arg.parse speclist ignore usage_msg

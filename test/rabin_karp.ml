@@ -31,17 +31,17 @@ module Hash = struct
 end
 
 let usage_msg = "rabin_karp [-n <int>] [-r <int>] [-c <int>]"
-let no_of_char = ref 100000
+let no_of_char = ref 1000
 let runs = ref 10
-let no_of_input_changes = ref 500
+let no_of_input_changes = ref 50
 
 let speclist =
   [
-    ("-n", Arg.Set_int no_of_char, "No. of char (Default: 100000)");
+    ("-n", Arg.Set_int no_of_char, "No. of char (Default: 1000)");
     ("-r", Arg.Set_int runs, "No. of runs for benchmarking (Default: 10)");
     ( "-c",
       Arg.Set_int no_of_input_changes,
-      "No. of changes to make to input before propagating (Default: 500)" );
+      "No. of changes to make to input before propagating (Default: 50)" );
   ]
 
 let () = Arg.parse speclist ignore usage_msg

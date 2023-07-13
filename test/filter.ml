@@ -6,13 +6,13 @@ module M = Utils.M (Js_incr)
 
 let () = Random.self_init ()
 let usage_msg = "filter [-n <int>] [-r <int>] [-c <int>]"
-let no_of_entries = ref 1000
+let no_of_entries = ref 100
 let runs = ref 10
 let no_of_input_changes = ref 5
 
 let speclist =
   [
-    ("-n", Arg.Set_int no_of_entries, "No. of elements in list (Default: 1000)");
+    ("-n", Arg.Set_int no_of_entries, "No. of elements in list (Default: 100)");
     ("-r", Arg.Set_int runs, "No. of runs for benchmarking (Default: 10)");
     ( "-c",
       Arg.Set_int no_of_input_changes,
