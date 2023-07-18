@@ -75,8 +75,8 @@ type executor = Types.executor = {
 module Cutoff : sig
   (**Defines different computation cutoff strategies*)
   type 'a t =
+    | Never  (**Never cut-off the computation*)
     | Always  (**Always cut-off the computation*)
-    | Never  (** Never cut-off the computation*)
     | Phys_equal
         (** Cut off the computation based on physical equality [(==)] *)
     | Eq of ('a -> 'a -> bool)

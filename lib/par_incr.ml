@@ -22,8 +22,15 @@ module RNode = Rsp.RNode
 
 module Cutoff = struct
   type 'a t = 'a Types.cutoff =
-    | Always
     | Never
+      (*Represented as 0, can be optimized to have no branch when we match on
+        this and check equality. We check is_same in Var.set, which would have
+        to be false if you don't want the computation to be cut-off. So we have
+        to return false*)
+    | Always
+      (*Represented as 1, can be optimized to have no branch when we match on
+        this and check equality. This means things are always equal and hence we
+        should have is_same be true.*)
     | Phys_equal
     | Eq of ('a -> 'a -> bool)
     | F of (oldval:'a -> newval:'a -> bool)
@@ -52,9 +59,14 @@ module Var = struct
       else
         let is_same =
           match cutoff with
+          | Never -> false
+          | Always ->
+            true
+            (*Compiler can optimize Always and Never cases by just returning it
+              directly because of the way they are defined. Always will be
+              represented as 1(same as true) and Never will be represented as
+              0(same as false) *)
           | Phys_equal -> x == value
-          | Always -> false
-          | Never -> true
           | Eq f -> f value x
           | F f -> f ~oldval:value ~newval:x
         in

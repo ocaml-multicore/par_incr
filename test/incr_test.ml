@@ -33,6 +33,106 @@ let simple_test () =
   let () = destroy_comp y in
   Alcotest.(check int) no_readers_check 0 (Var.num_readers x)
 
+let cutoff_strategy_test () =
+  let counter = ref 0 in
+  let fn x =
+    incr counter;
+    2 * x
+  in
+  let reset () = counter := 0 in
+  let run_incr = run ~executor:seq_executor in
+  let fn_call_count_check = "no. of times function is called" in
+  let () =
+    let x = Var.create ~cutoff:Phys_equal 10 in
+    let y = map ~fn (Var.watch x) in
+    let comp = run_incr y in
+    Alcotest.(check int) output_check 20 (value comp);
+    Alcotest.(check int) fn_call_count_check 1 !counter;
+
+    Var.set x 10;
+    (*Shouldn't call fn because value is same*)
+    propagate comp;
+    Alcotest.(check int) output_check 20 (value comp);
+    Alcotest.(check int) fn_call_count_check 1 !counter;
+
+    Var.set x 20;
+    (*Should call fn because value is diff*)
+    propagate comp;
+    Alcotest.(check int) output_check 40 (value comp);
+    Alcotest.(check int) fn_call_count_check 2 !counter;
+    destroy_comp comp;
+    reset ()
+  in
+  let () =
+    let x = Var.create ~cutoff:Never 10 in
+    let y = map ~fn (Var.watch x) in
+    let comp = run_incr y in
+    Alcotest.(check int) output_check 20 (value comp);
+    Alcotest.(check int) fn_call_count_check 1 !counter;
+    Var.set x 10;
+    (*Even tho the value is same, computation reruns because we've
+      specified Never as the cutoff strategy*)
+    propagate comp;
+    Alcotest.(check int) output_check 20 (value comp);
+    Alcotest.(check int) fn_call_count_check 2 !counter;
+    destroy_comp comp;
+    reset ()
+  in
+
+  let () =
+    let x = Var.create ~cutoff:Always 10 in
+    let y =
+      map
+        ~fn:(fun _ ->
+          incr counter;
+          30
+          (*Not really depending on x, so we can cutoff always(not really a
+            great example, but tests what we need)*))
+        (Var.watch x)
+    in
+    let comp = run_incr y in
+    Alcotest.(check int) output_check 30 (value comp);
+    Alcotest.(check int) fn_call_count_check 1 !counter;
+
+    Var.set x 20;
+    (* Even though the value is diff, fn won't run *)
+    propagate comp;
+    Alcotest.(check int) output_check 30 (value comp);
+    Alcotest.(check int) fn_call_count_check 1 !counter;
+    destroy_comp comp;
+    reset ()
+  in
+
+  let test_eq_and_f_variants cutoff =
+    let x = Var.create ~cutoff 10 in
+    let y =
+      map
+        ~fn:(fun x ->
+          (*This function removes the last digit for some reason(again not a great example)*)
+          incr counter;
+          x / 10)
+        (Var.watch x)
+    in
+    let comp = run_incr y in
+    Alcotest.(check int) output_check 1 (value comp);
+    Alcotest.(check int) fn_call_count_check 1 !counter;
+
+    Var.set x 15 (*Will cutoff*);
+    propagate comp;
+    Alcotest.(check int) output_check 1 (value comp);
+    Alcotest.(check int) fn_call_count_check 1 !counter;
+
+    Var.set x 21 (*Won't cutoff*);
+    propagate comp;
+    Alcotest.(check int) output_check 2 (value comp);
+    Alcotest.(check int) fn_call_count_check 2 !counter;
+    destroy_comp comp;
+    reset ()
+  in
+  test_eq_and_f_variants (Eq (fun x y -> x / 10 = y / 10));
+  test_eq_and_f_variants (F (fun ~oldval ~newval -> oldval / 10 = newval / 10));
+  ()
+
 (*
 Make sure destroy works properly. Behaviour is:
 
@@ -550,6 +650,7 @@ let () =
           Alcotest.test_case "par" `Quick par_test;
           Alcotest.test_case "par_test_for_gc" `Quick par_test_for_gc;
           Alcotest.test_case "bind" `Quick bind_test;
+          Alcotest.test_case "cutoff" `Quick cutoff_strategy_test;
         ] );
       ( "internals_test",
         [

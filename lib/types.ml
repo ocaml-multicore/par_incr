@@ -1,6 +1,6 @@
 type 'a cutoff =
-  | Always
   | Never
+  | Always
   | Phys_equal
   | Eq of ('a -> 'a -> bool)
   | F of (oldval:'a -> newval:'a -> bool)
