@@ -73,14 +73,25 @@ type executor = Types.executor = {
 *)
 
 module Cutoff : sig
+  (**Defines different computation cutoff strategies*)
   type 'a t =
-    | Always
-    | Never
+    | Always  (**Always cut-off the computation*)
+    | Never  (** Never cut-off the computation*)
     | Phys_equal
+        (** Cut off the computation based on physical equality [(==)] *)
     | Eq of ('a -> 'a -> bool)
+        (** Cutoff the computation based on the function passed*)
     | F of (oldval:'a -> newval:'a -> bool)
+        (** Same functionality as [Eq] but the equality function uses named
+            arguments*)
 
   val attach : 'a t -> 'a incremental -> 'a incremental
+  (** [Cutoff.attach cutoff incr] attaches the given cutoff strategy to the
+      incremental [incr]. The default cutoff in most cases is `Phys_equal`. So,
+      this is useful in cases where you want somewhat different cutoff
+      condition. Take floating point related computations for example, you may
+      choose to ignore difference in values within some delta. For such cases,
+      you can use this. *)
 end
 
 (** Defines the type and various operations for modifiable values. *)
@@ -92,8 +103,8 @@ module Var : sig
 
   val create : ?cutoff:'a Cutoff.t -> ?to_s:('a -> string) -> 'a -> 'a t
   (** [Var.create x] creates a [Var.t] with value [x]. Optionally you can
-      specify [eq] and [to_s] parameters as well. Default for [eq] is [(==)] and
-      it's recommended to pass [eq] wherever the default doesn't work. *)
+      specify [cutoff] and [to_s] parameters as well. Default for [cutoff] is [Phys_equal] and
+      it's recommended to pass [cutoff] wherever the default doesn't work. *)
 
   val set : 'a t -> 'a -> unit
   (** [Var.set t x] sets the value of [t] to [x]. In case [x] is same as the old
@@ -145,8 +156,8 @@ val return : 'a -> 'a t
 (** [return x] returns an instance of ['a incremental] from [x] of type ['a]. *)
 
 val map : ?cutoff:'b Cutoff.t -> fn:('a -> 'b) -> 'a t -> 'b t
-(** [map ~fn a] maps the internal value of [a] to [fn]. Default [eq] is
-    [(==)]. *)
+(** [map ~fn a] maps the internal value of [a] to [fn]. Default [cutoff] is
+    [Phys_equal]. *)
 
 val map2 :
   ?cutoff:'c Cutoff.t ->
@@ -158,7 +169,7 @@ val map2 :
 (** [map2 ~fn ?(mode=`Seq) a b] is a convenient function to [map] over two
     [incremental]s.  If [mode] is [`Seq], it computes [a] and [b] sequentially,
     but if it is [`Par], computing [a] and [b] happens in parallel (it's ran
-    with {!executor}s {!par_do} function). Default [eq] is [(==)]. *)
+    with {!executor}s {!par_do} function). Default [cutoff] is [Phys_equal]. *)
 
 val combine : 'a t -> 'b t -> ('a * 'b) t
 (** [combine a b] is useful function to combine two [incremental]'s into one. *)
@@ -220,9 +231,9 @@ module Syntax : sig
   val ( let+ ) : 'a t -> ('a -> 'b) -> 'b t
   (** Syntactic sugar for {!map}.
 
-      {b NOTE}: You can't provide your own [eq] function when using [Syntax]
-      module. You may use {!Eq.attach} to add it to the resultant [incremental],
-      but there's no way to pass it as parameter initially like with [map]. *)
+      {b NOTE}: You can't provide your own [cutoff] when using [Syntax] module.
+      You may use {!Cutoff.attach} to add it to the resultant [incremental], but
+      there's no way to pass it as parameter initially like with [map]. *)
 
   val ( and+ ) : 'a t -> 'b t -> ('a * 'b) t
   (** Syntactic sugar for {!combine}. Recommended to be used together with
