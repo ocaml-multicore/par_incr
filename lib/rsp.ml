@@ -179,9 +179,10 @@ let to_d2 ?(cnt = ref 0) (oc : Out_channel.t) =
       if nd_type = Utils.r_flag then begin
         assert (t.par == parent);
         let n = incr_and_get cnt in
+        let content = t.fn Show in
         Printf.fprintf oc
-          "\n%d: R {\nshape: sql_table\npending_mod: %s\ndetail: %s }" n
-          (Bool.to_string marked) (t.fn Show);
+          "\n%d: R {\nshape: sql_table\ndirty: %s\ndetail: %s\n}" n
+          (Bool.to_string marked) content;
         n
       end
       else begin
@@ -194,7 +195,7 @@ let to_d2 ?(cnt = ref 0) (oc : Out_channel.t) =
           "\n\
            %d: %s {\n\
            shape: sql_table\n\
-           par_mark:%s\n\
+           dirty:%s\n\
            }\n\
           \ %d -> %d : %s \n\
           \ %d -> %d : %s " n nd_type_as_string (Bool.to_string marked) n leftid

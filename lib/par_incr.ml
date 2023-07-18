@@ -24,7 +24,7 @@ module Var = struct
   let create ?(eq = ( == )) ?(to_s = Utils.undefined) x =
     {value = Some x; eq; to_string = to_s; readers = Reader_list.empty ()}
 
-  let empty ~(eq : 'a -> 'a -> bool) ~(to_s : 'a -> string) () =
+  let[@inline] empty ~(eq : 'a -> 'a -> bool) ~(to_s : 'a -> string) () =
     {value = None; eq; to_string = to_s; readers = Reader_list.empty ()}
 
   let[@inline] set ({eq; value; readers; _} as t) x =
@@ -65,7 +65,7 @@ let map ?(eq = ( == )) ~(fn : 'a -> 'b) (t : 'a t) (ctx : ctx) (e : executor) =
     let read_fn (type a) : a action -> a = function
       | Update -> Var.set y (Var.value x |> fn)
       | Remove self -> Var.remove_reader x self
-      | Show -> "map, val: " ^ Var.to_s y
+      | Show -> "map: " ^ Var.to_s y
       | Count cntr -> cntr.map <- cntr.map + 1
     in
 
@@ -95,7 +95,7 @@ let combine (a : 'a t) (b : 'b t) ctx e =
       | Remove self ->
         Var.remove_reader x self;
         Var.remove_reader y self
-      | Show -> "combined var: " ^ Var.to_s xy
+      | Show -> "combine: " ^ Var.to_s xy
       | Count cntr -> cntr.combine <- cntr.combine + 1
     in
     let read_xy = RNode.make ~fn:RNode.{fn = read_fn_xy} in
@@ -134,7 +134,7 @@ let par ~left ~right ctx e =
       | Remove self ->
         Var.remove_reader lres self;
         Var.remove_reader rres self
-      | Show -> "par var: " ^ Var.to_s lr_comb
+      | Show -> "par: " ^ Var.to_s lr_comb
       | Count cntr -> cntr.par_do <- cntr.par_do + 1
     in
     let read_lr = RNode.make ~fn:RNode.{fn = read_fn_lr_comb} in
@@ -197,7 +197,7 @@ let bind ~fn x ctx e =
             Var.attach_eq y (Var.eq yvar');
             Var.attach_to_string y (Var.get_to_string yvar')
           | Remove self -> Var.remove_reader yvar' self
-          | Show -> "inner-bind, val: " ^ Var.to_s y
+          | Show -> "inner-bind: " ^ Var.to_s y
           | Count _ -> () (*Not going to count this*)
         in
         let read_yvar' = RNode.make ~fn:RNode.{fn = read_fn_yvar'} in
@@ -206,7 +206,7 @@ let bind ~fn x ctx e =
         read_yvar'.fn Update
       end
       | Remove self -> Var.remove_reader xvar self
-      | Show -> "outer-bind, val: " ^ Var.to_s xvar
+      | Show -> "outer-bind: " ^ Var.to_s xvar
       | Count cntr -> cntr.bind <- cntr.bind + 1
     in
     let read_xvar = RNode.make ~fn:RNode.{fn = read_fn_xvar} in
