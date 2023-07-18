@@ -1,4 +1,11 @@
-(test
-  (name incr_test)
-  (libraries par_incr alcotest)
+(tests
+  (names
+    incr_test
+    merge_sort
+    filter
+    sum_array
+    spellcheck
+    rabin_karp
+  )
+   (libraries unix par_incr domainslib current_incr incremental alcotest)
 )
