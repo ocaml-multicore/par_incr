@@ -8,7 +8,6 @@ let mask = 3
 let[@inline] deref t =
   match t with Some x -> x | None -> failwith "deref on None failed"
 
-let[@inline] combine_eq eq1 eq2 (a', b') (a'', b'') = eq1 a' a'' && eq2 b' b''
 let[@inline] impossible () = failwith "Impossible case"
 let undefined _ = "var"
 

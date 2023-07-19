@@ -2,7 +2,7 @@ module RNode = struct
   open Types
 
   type t = rnode
-  type show_fn_wrapper = {fn : 'a. 'a action -> 'a}
+  type show_fn_wrapper = {fn : 'a. 'a action -> 'a} [@@unboxed]
 
   let[@inline] make ~fn:{fn} =
     {
@@ -13,20 +13,17 @@ module RNode = struct
       fn;
     }
 
-  let[@inline] mark_dirty ({flags; par; _} as t) =
-    begin
-      if not (Utils.is_marked flags) then (
-        t.flags <- Utils.make_marked flags;
-        set_mark par)
-    end
+  let mark_dirty ({flags; par; _} as t) =
+    if not (Utils.is_marked flags) then (
+      t.flags <- Utils.make_marked flags;
+      set_mark par)
 end
 
 open Types
 
 type t = comp_tree
 
-let empty = Types.nil_tree
-let nil_tree = Types.nil_tree
+let empty = nil_tree
 
 let[@inline] set_parent_exn ~c ~p =
   if c != nil_tree && not (Utils.is_root c.flags) then c.par <- p
@@ -114,33 +111,25 @@ let[@inline] make_node ~l ~r typ =
     set_parent_exn ~c:r ~p:nd;
     nd
 
-(* let make_rnode rnd = R rnd *)
-
 let[@inline] is_marked c = c != nil_tree && Utils.is_marked c.flags
 
 let rec propagate_exn comp e =
-  (* if comp == nil_tree then () *)
-  (* else  *)
-  begin
-    let {left; right; fn; flags; _} = comp in
-    let masked_flag = Utils.masked flags in
-    (* if Utils.is_marked flag then begin *)
-    if masked_flag = Utils.r_flag then fn Update
-    else if masked_flag = Utils.p_flag && is_marked left && is_marked right then
-      let _ =
-        e.par_do
-          (fun () -> propagate_exn left e)
-          (fun () -> propagate_exn right e)
-      in
-      ()
-    else begin
-      (* Root is impossible case *)
-      if masked_flag = Utils.root_flag then Utils.impossible ();
-      if is_marked left then propagate_exn left e;
-      if is_marked right then propagate_exn right e
-    end;
-    (* end; *)
-    comp.flags <- masked_flag
+  let {left; right; fn; flags; _} = comp in
+  let masked_flag = Utils.masked flags in
+  comp.flags <- masked_flag;
+  if masked_flag = Utils.r_flag then fn Update
+  else if masked_flag = Utils.p_flag && is_marked left && is_marked right then
+    let _ =
+      e.par_do
+        (fun () -> propagate_exn left e)
+        (fun () -> propagate_exn right e)
+    in
+    ()
+  else begin
+    (* Root is impossible case *)
+    if masked_flag = Utils.root_flag then Utils.impossible ();
+    if is_marked left then propagate_exn left e;
+    if is_marked right then propagate_exn right e
   end
 
 let propagate_root comp e =
@@ -157,12 +146,11 @@ let propagate_root comp e =
   end
 
 let[@inline] set_and_get_exn t dir child =
-  (set_exn [@inlined]) t dir child;
+  set_exn t dir child;
   child
 
 let to_d2 ?(cnt = ref 0) (oc : Out_channel.t) =
-  (* let cnt = ref 0 in *)
-  let[@inline] incr_and_get cnt =
+  let incr_and_get cnt =
     incr cnt;
     !cnt
   in

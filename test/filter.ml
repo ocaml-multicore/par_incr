@@ -30,9 +30,9 @@ type 'a lst = Nil | Cons of {value : 'a; mutable rest : 'a lst}
 let[@tail_mod_cons] rec lst_to_list l =
   match l with Nil -> [] | Cons {value; rest} -> value :: lst_to_list rest
 
-let lst_eq a b =
-  let x, _ = a in
-  let y, _ = b in
+let lst_eq oldval newval =
+  let x, _ = oldval in
+  let y, _ = newval in
   match (x, y) with Nil, Nil -> true | _ -> false
 
 let set_rest lst rest = match lst with Nil -> () | Cons l -> l.rest <- rest
@@ -55,7 +55,7 @@ let combine_fn (x, xlast) (y, ylast) =
 
 let filter ~mode ~fn (xs : int Incr.t list) =
   let f : 'a -> (int -> 'a) -> ('a -> 'a -> 'a) -> int Incr.t list -> 'a t =
-    Utils.reduce_lst ~eq:lst_eq ~mode
+    Utils.reduce_lst ~cutoff:(Eq lst_eq) ~mode
   in
   f (Nil, Nil) (one_fn fn) combine_fn xs
 

@@ -1,3 +1,10 @@
+type 'a cutoff =
+  | Never
+  | Always
+  | Phys_equal
+  | Eq of ('a -> 'a -> bool)
+  | F of (oldval:'a -> newval:'a -> bool)
+
 type comp_tree = {
   mutable par : comp_tree;
   mutable flags : int;
