@@ -1,5 +1,3 @@
-let null = Obj.magic (ref ())
-
 type 'a var = {
   mutable value : 'a;
   mutable cutoff : 'a Types.cutoff;
@@ -43,6 +41,8 @@ end
 
 module Var = struct
   type 'a t = 'a var
+
+  let null = Obj.magic (ref ())
 
   let create ?(cutoff = Cutoff.Phys_equal) ?(to_s = Utils.undefined) x =
     let v =
