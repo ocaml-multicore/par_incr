@@ -284,9 +284,18 @@ let par_test () =
     done;
 
     T.teardown_pool pool;
-    (*propagating with torn down pool raises exception, hence not legal
+
+    Alcotest.(check bool)
+      "propagate doesn't raise on tearing down pool if the tree isn't dirty"
+      false
+      (does_raise (fun () -> propagate dbl_sum));
+
+    Var.set x 1000;
+
+    (*propagating with torn down pool raises exception(if tree is dirty), hence not legal
       behaviour*)
-    Alcotest.check_raises "running propagate with torn down pool raises exn"
+    Alcotest.check_raises
+      "running propagate with torn down pool and dirty tree raises exn"
       (Invalid_argument "pool already torn down") (fun () -> propagate dbl_sum);
     destroy_comp dbl_sum;
     ()
@@ -427,6 +436,8 @@ let internals_test () =
   let executor = {run; par_do} in
   let sum_c = Par_incr.run ~executor sum in
 
+  Alcotest.(check int) "No dirty nodes at the start" 0 (get_stat sum_c).dirty;
+
   Alcotest.(check int) output_check 55 (value sum_c);
 
   (*
@@ -474,17 +485,39 @@ let internals_test () =
     (*This computation should cutoff early since the value of the sum of these two won't change*)
     var_arr.(0) := 0;
     var_arr.(1) := 3);
+  Alcotest.(check bool) "Some nodes are dirty" true ((get_stat sum_c).dirty > 0);
 
   propagate sum_c;
   Alcotest.(check int) "No of add operations executed" 1 !ops;
+  Alcotest.(check int)
+    "No dirty nodes after propagation" 0 (get_stat sum_c).dirty;
 
   reset_ops ();
 
   Var.Syntax.(var_arr.(2) := !(var_arr.(2)) + 1);
 
+  Alcotest.(check bool)
+    "Some nodes are dirty after change" true
+    ((get_stat sum_c).dirty > 0);
+
   propagate sum_c;
+  Alcotest.(check int)
+    "No dirty nodes after propagation" 0 (get_stat sum_c).dirty;
   Alcotest.(check int) output_check 56 (value sum_c);
   Alcotest.(check int) "No of add operations executed" 3 !ops;
+  reset_ops ();
+
+  Var.Syntax.(var_arr.(2) := !(var_arr.(2)));
+
+  Alcotest.(check int)
+    "No nodes are dirty since we didn't really change the value" 0
+    (get_stat sum_c).dirty;
+
+  propagate sum_c;
+  Alcotest.(check int)
+    "No dirty nodes after propagation" 0 (get_stat sum_c).dirty;
+  Alcotest.(check int) output_check 56 (value sum_c);
+  Alcotest.(check int) "No of add operations executed" 0 !ops;
 
   destroy_comp sum_c
 
