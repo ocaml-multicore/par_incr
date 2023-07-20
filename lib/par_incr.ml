@@ -131,7 +131,11 @@ let combine (a : 'a t) (b : 'b t) ctx e =
   let lr = Rsp.make_empty `S in
   let x = a ll e in
   let y = b lr e in
-  let xy = Var.empty ~cutoff:Phys_equal ~to_s:Utils.undefined () in
+  let xy =
+    Var.empty ~cutoff:Phys_equal
+      ~to_s:(Utils.combine_to_s (Var.get_to_string x) (Var.get_to_string y))
+      ()
+  in
   let read_fn_xy (type a) : a action -> a = function
     | Update -> Var.set xy (Var.value x, Var.value y)
     | Remove self ->

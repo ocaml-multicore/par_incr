@@ -116,7 +116,6 @@ let[@inline] is_marked c = c != nil_tree && Utils.is_marked c.flags
 let rec propagate_exn comp e =
   let {left; right; fn; flags; _} = comp in
   let masked_flag = Utils.masked flags in
-  comp.flags <- masked_flag;
   if masked_flag = Utils.r_flag then fn Update
   else if masked_flag = Utils.p_flag && is_marked left && is_marked right then
     let _ =
@@ -130,7 +129,8 @@ let rec propagate_exn comp e =
     if masked_flag = Utils.root_flag then Utils.impossible ();
     if is_marked left then propagate_exn left e;
     if is_marked right then propagate_exn right e
-  end
+  end;
+  comp.flags <- masked_flag
 
 let propagate_root comp e =
   if comp == nil_tree then
@@ -139,10 +139,11 @@ let propagate_root comp e =
     let {left; right; flags; par; _} = comp in
     assert (Utils.is_root flags);
     assert (par == nil_tree);
-    if Utils.is_marked comp.flags then
+    if Utils.is_marked comp.flags then (
       e.run (fun () ->
           if is_marked left then propagate_exn left e;
-          if is_marked right then propagate_exn right e)
+          if is_marked right then propagate_exn right e);
+      comp.flags <- Utils.masked flags)
   end
 
 let[@inline] set_and_get_exn t dir child =
