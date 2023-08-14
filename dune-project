@@ -20,12 +20,12 @@
  (description "A library for incremental computation, with support for parallelism")
  (depends
   (ocaml (>= "5.0"))
-  (dune (>= "3.6"))
+  dune
   (domainslib (and (>= "0.5.0") :with-test ))
   (alcotest (and (>= "1.7.0") :with-test ))
   (mdx (and (>= "2.3.0") :with-test ))
   (current_incr (and (>= "0.6.1") :with-test))
-  (incremental (and (>= "0.15.0") :with-test)))
+  (incremental (and (>= "v0.15.0") :with-test)))
 
  (tags
   (ocaml incremental "multicore-ocaml")
