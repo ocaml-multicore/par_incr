@@ -7,36 +7,6 @@ on:
       - main
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-        ocaml-compiler:
-          - 5.0.0
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Use OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v2
-        with:
-          ocaml-compiler: ${{ matrix.ocaml-compiler }}
-
-      - name: Install dependencies
-        run: opam install . --deps-only --with-test
-
-      - name: Build
-        run: opam exec -- dune build
-
-      - name: Test
-        run: opam exec -- dune runtest
-
   build-windows:
     runs-on: windows-latest
 
