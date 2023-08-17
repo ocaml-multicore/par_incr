@@ -1,4 +1,4 @@
-(lang dune 3.6)
+(lang dune 3.9)
 
 (name par_incr)
 
@@ -25,7 +25,7 @@
   (alcotest (and (>= "1.7.0") :with-test ))
   (mdx (and (>= "2.3.0") :with-test ))
   (current_incr (and (>= "0.6.1") :with-test))
-  (incremental (and (>= "v0.15.0") :with-test)))
+  (incremental (and (>= "v0.15.0") (<> :os "win32") :with-test)))
 
  (tags
   (ocaml incremental "multicore-ocaml")
