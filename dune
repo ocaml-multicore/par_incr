@@ -1,5 +1,7 @@
 (mdx
  (package par_incr)
+ (enabled_if
+  (>= %{ocaml_version} 5.0.0))
  (deps
   (package par_incr))
  (files README.md))

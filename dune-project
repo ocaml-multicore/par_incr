@@ -19,8 +19,7 @@
  (synopsis "Parallel Self Adjusting Computation")
  (description "A library for incremental computation, with support for parallelism")
  (depends
-  (ocaml (>= "5.0"))
-  dune
+  (ocaml (>= "4.14.0"))
   (domainslib (and (>= "0.5.0") :with-test ))
   (alcotest (and (>= "1.7.0") :with-test ))
   (mdx (and (>= "2.3.0") :with-test ))

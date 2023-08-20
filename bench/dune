@@ -1,4 +1,7 @@
 (tests
  (names merge_sort filter sum_array spellcheck rabin_karp)
- (build_if %{lib-available:incremental})
+ (build_if
+  (and
+   %{lib-available:incremental}
+   (>= %{ocaml_version} 5.0.0)))
  (libraries unix par_incr domainslib current_incr incremental))
