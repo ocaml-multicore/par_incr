@@ -403,11 +403,11 @@ val filter :
 We can see `filter` does indeed work as expected.
 
 ```ocaml
-# let var_list = to_var_list [2;3;5]
-val var_list : _[> `Cons of int * 'a | `Nil ] Var.t as 'a = <abstr>
+# let var_list = (to_var_list [2;3;5] :> [ `Cons of _ | `Nil ] Var.t)
+val var_list : [ `Cons of int * 'a | `Nil ] Var.t as 'a = <abstr>
 
-# let incr_list = to_incr_list var_list
-val incr_list : _[> `Cons of int * 'a | `Nil ] t as 'a = <abstr>
+# let incr_list = (to_incr_list var_list :> [ `Cons of _ | `Nil ] t)
+val incr_list : [ `Cons of int * 'a | `Nil ] t as 'a = <abstr>
 
 # let res_list = filter (fun x -> x mod 2 = 1)
                  incr_list
